@@ -16,6 +16,7 @@ export default function Home() {
     fetchDocuments,
     updateCurrentContent,
     saveDocument,
+    isFileSystemMode,
   } = useEditorStore()
 
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
@@ -27,19 +28,19 @@ export default function Home() {
   // Auto-save with debounce (no toast notification)
   const handleContentChange = useCallback((content: string) => {
     updateCurrentContent(content)
-    
+
     // Debounced auto-save without toast
     if (saveTimeout) {
       clearTimeout(saveTimeout)
     }
-    
+
     const timeout = setTimeout(async () => {
       if (currentDocument) {
         await saveDocument()
         // No toast for auto-save - silent background save
       }
     }, 2000)
-    
+
     setSaveTimeout(timeout)
   }, [currentDocument, updateCurrentContent, saveDocument, saveTimeout])
 
@@ -67,6 +68,23 @@ export default function Home() {
       }
     }
   }, [saveTimeout])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + S to save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        if (currentDocument) {
+          saveDocument()
+          toast.success('Document saved')
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [currentDocument, saveDocument])
 
   return (
     <div className="flex h-screen flex-col">

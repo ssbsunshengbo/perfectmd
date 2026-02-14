@@ -3,20 +3,46 @@
 import { useEditorStore } from '@/store/editor-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Moon, Sun, FileText, Save } from 'lucide-react'
+import {
+  Moon,
+  Sun,
+  FileText,
+  Save,
+  Upload,
+  Download,
+  FileDown,
+  FolderOpen,
+} from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { isTauri } from '@/lib/file-service'
 
 export function Header() {
-  const { currentDocument, updateCurrentTitle, saveDocument } = useEditorStore()
+  const {
+    currentDocument,
+    updateCurrentTitle,
+    saveDocument,
+    importFile,
+    saveCurrentFile,
+    exportAsPdf,
+    openFolder,
+    isFileSystemMode,
+    currentDirectory,
+  } = useEditorStore()
   const { theme, setTheme } = useTheme()
   const [isSaving, setIsSaving] = useState(false)
   const [mounted, setMounted] = useState(false)
 
   // Track mounted state for hydration
   useEffect(() => {
-    // Using a microtask to avoid synchronous setState warning
     const timer = setTimeout(() => setMounted(true), 0)
     return () => clearTimeout(timer)
   }, [])
@@ -49,14 +75,49 @@ export function Header() {
     }
   }
 
+  const handleImportFile = async () => {
+    const doc = await importFile()
+    if (doc) {
+      toast.success(`Imported: ${doc.title}`)
+    }
+  }
+
+  const handleSaveFile = async () => {
+    const success = await saveCurrentFile()
+    if (success) {
+      toast.success('File saved')
+    }
+  }
+
+  const handleExportPdf = async () => {
+    const success = await exportAsPdf()
+    if (success) {
+      toast.success('PDF exported successfully')
+    } else {
+      toast.error('Failed to export PDF')
+    }
+  }
+
+  const handleOpenFolder = async () => {
+    const path = await openFolder()
+    if (path) {
+      toast.success('Folder opened')
+    }
+  }
+
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-3">
         <FileText className="h-6 w-6 text-primary" />
-        <h1 className="text-lg font-semibold">Markdown Editor</h1>
+        <h1 className="text-lg font-semibold">PerfectMD</h1>
         {currentDocument && (
           <span className="text-xs text-muted-foreground">
             • {isSaving ? 'Saving...' : 'Auto-saved'}
+          </span>
+        )}
+        {isFileSystemMode && currentDirectory && (
+          <span className="max-w-[200px] truncate text-xs text-primary">
+            📁 {currentDirectory.split(/[/\\]/).pop()}
           </span>
         )}
       </div>
@@ -71,6 +132,41 @@ export function Header() {
               className="h-8 w-48 text-sm"
               placeholder="Document title"
             />
+
+            {/* File Operations */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1">
+                  <Download className="h-4 w-4" />
+                  File
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleImportFile}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import MD File
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSaveFile}>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save As...
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleExportPdf}>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Export as PDF
+                </DropdownMenuItem>
+                {isTauri() && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleOpenFolder}>
+                      <FolderOpen className="mr-2 h-4 w-4" />
+                      Open Folder
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button
               variant="outline"
               size="sm"
@@ -83,7 +179,7 @@ export function Header() {
             </Button>
           </>
         )}
-        
+
         {mounted && (
           <Button
             variant="ghost"

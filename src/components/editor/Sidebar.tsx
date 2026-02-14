@@ -16,6 +16,12 @@ import {
   Upload,
   MoreHorizontal,
   Database,
+  FolderOpen,
+  Folder,
+  File,
+  ChevronRight,
+  Home,
+  X,
 } from 'lucide-react'
 import { useState, useRef } from 'react'
 import {
@@ -26,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
+import { isTauri, type FileInfo } from '@/lib/file-service'
 
 interface SidebarProps {
   onExport: () => void
@@ -43,10 +50,22 @@ export function Sidebar({ onExport }: SidebarProps) {
     togglePin,
     exportAllDocuments,
     importDocumentsFromJson,
+    // File system mode
+    isFileSystemMode,
+    currentDirectory,
+    directoryFiles,
+    currentFilePath,
+    openFolder,
+    loadDirectoryContents,
+    openFileFromDirectory,
+    createNewFileInDirectory,
+    setCurrentDirectory,
   } = useEditorStore()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  const [newFileName, setNewFileName] = useState('')
+  const [isCreatingFile, setIsCreatingFile] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const filteredDocuments = documents.filter((doc) =>
@@ -105,8 +124,42 @@ export function Sidebar({ onExport }: SidebarProps) {
       toast.error('Failed to restore backup. Make sure the file is valid.')
     }
 
-    // Reset file input
     e.target.value = ''
+  }
+
+  const handleOpenFolder = async () => {
+    await openFolder()
+  }
+
+  const handleCloseFolder = () => {
+    setCurrentDirectory(null)
+  }
+
+  const handleFileClick = async (file: FileInfo) => {
+    if (file.isDirectory) {
+      // Navigate into directory
+      await loadDirectoryContents(file.path)
+    } else if (file.name.endsWith('.md') || file.name.endsWith('.markdown') || file.name.endsWith('.txt')) {
+      // Open markdown file
+      await openFileFromDirectory(file.path)
+    }
+  }
+
+  const handleCreateNewFile = async () => {
+    if (!newFileName.trim()) {
+      toast.error('Please enter a file name')
+      return
+    }
+
+    const fileName = newFileName.endsWith('.md') ? newFileName : `${newFileName}.md`
+    setIsCreatingFile(true)
+    const path = await createNewFileInDirectory(fileName)
+    setIsCreatingFile(false)
+
+    if (path) {
+      setNewFileName('')
+      toast.success(`Created ${fileName}`)
+    }
   }
 
   const formatDate = (date: string) => {
@@ -119,89 +172,119 @@ export function Sidebar({ onExport }: SidebarProps) {
     })
   }
 
-  if (!isSidebarOpen) {
-    return (
-      <div className="flex h-full w-12 flex-col items-center border-r bg-muted/30 py-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSidebarOpen(true)}
-          className="mb-4"
-          title="Open sidebar"
-        >
-          <FileText className="h-5 w-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleCreateDocument}
-          disabled={isCreating}
-          title="New document"
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleBackup}
-          title="Backup data"
-          className="mt-2"
-        >
-          <Database className="h-5 w-5" />
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex h-full w-64 flex-col border-r bg-muted/30">
-      {/* Hidden file input for restore */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".json"
-        className="hidden"
-      />
-
-      {/* Header */}
-      <div className="flex items-center justify-between border-b p-3">
-        <h2 className="text-sm font-semibold">Documents</h2>
+  // Render file tree for file system mode
+  const renderFileTree = () => (
+    <div className="flex flex-col h-full">
+      {/* Folder header */}
+      <div className="flex items-center justify-between border-b p-2 bg-muted/50">
+        <div className="flex items-center gap-2 min-w-0">
+          <Folder className="h-4 w-4 shrink-0 text-primary" />
+          <span className="truncate text-sm font-medium">
+            {currentDirectory?.split(/[/\\]/).pop()}
+          </span>
+        </div>
         <div className="flex items-center gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7" title="Data options">
-                <Database className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleBackup}>
-                <Download className="mr-2 h-4 w-4" />
-                Backup All Data
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleRestore}>
-                <Upload className="mr-2 h-4 w-4" />
-                Restore from Backup
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onExport}>
-                <Download className="mr-2 h-4 w-4" />
-                Export Current Document
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
-            onClick={() => setSidebarOpen(false)}
-            title="Close sidebar"
+            className="h-6 w-6"
+            onClick={handleOpenFolder}
+            title="Open another folder"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <FolderOpen className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={handleCloseFolder}
+            title="Close folder"
+          >
+            <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
+      {/* New file input */}
+      {isCreatingFile ? (
+        <div className="p-2 border-b flex gap-2">
+          <Input
+            value={newFileName}
+            onChange={(e) => setNewFileName(e.target.value)}
+            placeholder="filename.md"
+            className="h-8 text-sm flex-1"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCreateNewFile()
+              if (e.key === 'Escape') setIsCreatingFile(false)
+            }}
+          />
+          <Button size="sm" onClick={handleCreateNewFile}>Create</Button>
+        </div>
+      ) : (
+        <div className="p-2 border-b">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start gap-2"
+            onClick={() => setIsCreatingFile(true)}
+          >
+            <Plus className="h-4 w-4" />
+            New File
+          </Button>
+        </div>
+      )}
+
+      {/* File list */}
+      <ScrollArea className="flex-1">
+        <div className="p-1">
+          {/* Go back button */}
+          {currentDirectory && currentDirectory.includes('/') && (
+            <div
+              className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent text-sm text-muted-foreground"
+              onClick={async () => {
+                const parentPath = currentDirectory.split('/').slice(0, -1).join('/')
+                if (parentPath) {
+                  await loadDirectoryContents(parentPath)
+                }
+              }}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>..</span>
+            </div>
+          )}
+
+          {/* Files and folders */}
+          {directoryFiles.map((file) => (
+            <div
+              key={file.path}
+              className={`group flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent ${
+                currentFilePath === file.path ? 'bg-accent' : ''
+              }`}
+              onClick={() => handleFileClick(file)}
+            >
+              {file.isDirectory ? (
+                <Folder className="h-4 w-4 text-primary shrink-0" />
+              ) : (
+                <File className="h-4 w-4 text-muted-foreground shrink-0" />
+              )}
+              <span className="truncate text-sm">{file.name}</span>
+            </div>
+          ))}
+
+          {directoryFiles.length === 0 && (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              Empty folder
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  )
+
+  // Render document list for database mode
+  const renderDocumentList = () => (
+    <>
       {/* Search */}
       <div className="p-2">
         <div className="relative">
@@ -299,6 +382,120 @@ export function Sidebar({ onExport }: SidebarProps) {
       <div className="border-t p-2 text-xs text-muted-foreground">
         {documents.length} document{documents.length !== 1 ? 's' : ''}
       </div>
+    </>
+  )
+
+  if (!isSidebarOpen) {
+    return (
+      <div className="flex h-full w-12 flex-col items-center border-r bg-muted/30 py-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setSidebarOpen(true)}
+          className="mb-4"
+          title="Open sidebar"
+        >
+          <FileText className="h-5 w-5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleCreateDocument}
+          disabled={isCreating}
+          title="New document"
+        >
+          <Plus className="h-5 w-5" />
+        </Button>
+        {isTauri() && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenFolder}
+            title="Open folder"
+            className="mt-2"
+          >
+            <FolderOpen className="h-5 w-5" />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleBackup}
+          title="Backup data"
+          className="mt-2"
+        >
+          <Database className="h-5 w-5" />
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full w-64 flex-col border-r bg-muted/30">
+      {/* Hidden file input for restore */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".json"
+        className="hidden"
+      />
+
+      {/* Header */}
+      <div className="flex items-center justify-between border-b p-3">
+        <h2 className="text-sm font-semibold">
+          {isFileSystemMode ? 'Files' : 'Documents'}
+        </h2>
+        <div className="flex items-center gap-1">
+          {!isFileSystemMode && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7" title="Data options">
+                  <Database className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleBackup}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Backup All Data
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleRestore}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Restore from Backup
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onExport}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Current Document
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {isTauri() && !isFileSystemMode && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleOpenFolder}
+              title="Open folder"
+            >
+              <FolderOpen className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setSidebarOpen(false)}
+            title="Close sidebar"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Content - File Tree or Document List */}
+      {isFileSystemMode ? renderFileTree() : renderDocumentList()}
     </div>
   )
 }
