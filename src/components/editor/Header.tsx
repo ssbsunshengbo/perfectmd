@@ -12,6 +12,7 @@ import {
   Download,
   FileDown,
   FolderOpen,
+  Settings,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useState, useEffect, useCallback } from 'react'
@@ -24,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { isTauri } from '@/lib/file-service'
+import { ThemeSettings } from '@/components/editor/ThemeSettings'
 
 export function Header() {
   const {
@@ -180,11 +182,16 @@ export function Header() {
           </>
         )}
 
+        {/* Theme Settings */}
+        <ThemeSettings />
+
+        {/* Quick Dark/Light Toggle */}
         {mounted && (
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {theme === 'dark' ? (
               <Sun className="h-5 w-5" />
