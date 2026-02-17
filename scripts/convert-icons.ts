@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
 
-const sourceIcon = path.join(process.cwd(), 'app-icon.png');
+const sourceIcon = path.join(process.cwd(), 'app-icon-new.png');
 const iconsDir = path.join(process.cwd(), 'src-tauri', 'icons');
 
 if (!fs.existsSync(iconsDir)) {
@@ -24,18 +24,18 @@ async function createIcons() {
   for (const [size, name] of sizes) {
     await sharp(sourceIcon)
       .resize(size as number, size as number)
-      .png()
+      .png({ compressionLevel: 9 })
       .toFile(path.join(iconsDir, name));
     console.log(`Created ${name}`);
   }
 
-  // Create ICO for Windows (multi-resolution)
-  const size16 = await sharp(sourceIcon).resize(16, 16).png().toBuffer();
-  const size32 = await sharp(sourceIcon).resize(32, 32).png().toBuffer();
-  const size48 = await sharp(sourceIcon).resize(48, 48).png().toBuffer();
-  const size64 = await sharp(sourceIcon).resize(64, 64).png().toBuffer();
-  const size128 = await sharp(sourceIcon).resize(128, 128).png().toBuffer();
-  const size256 = await sharp(sourceIcon).resize(256, 256).png().toBuffer();
+  // Create ICO for Windows (multi-resolution) - ensure RGBA format
+  const size16 = await sharp(sourceIcon).resize(16, 16).ensureAlpha().png().toBuffer();
+  const size32 = await sharp(sourceIcon).resize(32, 32).ensureAlpha().png().toBuffer();
+  const size48 = await sharp(sourceIcon).resize(48, 48).ensureAlpha().png().toBuffer();
+  const size64 = await sharp(sourceIcon).resize(64, 64).ensureAlpha().png().toBuffer();
+  const size128 = await sharp(sourceIcon).resize(128, 128).ensureAlpha().png().toBuffer();
+  const size256 = await sharp(sourceIcon).resize(256, 256).ensureAlpha().png().toBuffer();
 
   // Create ICO with multiple images (PNG format inside ICO)
   const ico = createIco([
@@ -53,6 +53,7 @@ async function createIcons() {
   // For ICNS, we use PNG (macOS handles this)
   await sharp(sourceIcon)
     .resize(512, 512)
+    .ensureAlpha()
     .png()
     .toFile(path.join(iconsDir, 'icon.icns'));
   console.log('Created icon.icns');
