@@ -1,5 +1,7 @@
 # PerfectMD
 
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
 A modern Markdown editor combining Typora's simplicity with Word's rich formatting capabilities.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -21,6 +23,41 @@ A modern Markdown editor combining Typora's simplicity with Word's rich formatti
 - **Export**: Export to Markdown format
 - **Backup/Restore**: Full data backup and restore functionality
 - **Local Storage**: All data stored locally in your browser (IndexedDB)
+
+## 📝 Markdown Auto-Convert
+
+PerfectMD supports typing Markdown syntax directly in the editor and auto-converting it to rich text.
+
+### Block Syntax (auto-convert on trigger)
+
+- `# ` -> H1
+- `## ` -> H2
+- `### ` -> H3
+- `> ` -> Blockquote
+- `- ` / `* ` -> Bullet list
+- `1. ` -> Ordered list
+- `---` / `***` + `Enter` -> Horizontal rule
+
+### Inline Syntax (auto-convert on space)
+
+- `**text**` -> bold
+- `*text*` / `_text_` -> italic
+- `~~text~~` / `～～text～～` -> strikethrough
+- `` `text` `` -> inline code
+- `++text++` / `<u>text</u>` -> underline
+- `[label](https://example.com)` -> link
+
+### Editing Stability Notes
+
+- Color and highlight are applied only to selected text to avoid leaking style state into later input.
+- After inline conversion and newline, caret is normalized to a clean paragraph context to prevent style inheritance to the next line.
+- Heading shortcuts (`##` etc.) are resolved against the current line block, avoiding accidental fallback to the previous line.
+
+### Enter vs Shift+Enter
+
+- `Enter`: creates a new paragraph (new block). This is the recommended way for normal writing and for continuing with block-level Markdown shortcuts such as `##`, `>`, and lists.
+- `Shift+Enter`: inserts a soft line break inside the current paragraph/block (no new block is created).
+- If you want the next line to use a different block format (for example, switch to a heading), use `Enter` instead of `Shift+Enter`.
 
 ## 📥 Download & Install
 
