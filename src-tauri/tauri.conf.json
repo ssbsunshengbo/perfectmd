@@ -40,14 +40,5 @@
     "shortDescription": "PerfectMD - Markdown Editor",
     "longDescription": "A modern Markdown editor combining Typora's simplicity with Word's rich formatting capabilities",
     "publisher": "PerfectMD"
-  },
-  "plugins": {
-    "fs": {
-      "all": true,
-      "scope": ["**"]
-    },
-    "dialog": {
-      "all": true
-    }
   }
 }
