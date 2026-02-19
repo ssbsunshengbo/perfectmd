@@ -2,7 +2,8 @@ import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
 
-const sourceIcon = path.join(process.cwd(), 'app-icon-new.png');
+// 将你的图标文件放到 upload/ 目录，或修改下面的路径
+const sourceIcon = path.join(process.cwd(), 'upload/PerfectMD图标设计.png');
 const iconsDir = path.join(process.cwd(), 'src-tauri', 'icons');
 
 if (!fs.existsSync(iconsDir)) {
