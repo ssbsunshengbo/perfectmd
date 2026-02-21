@@ -11,6 +11,7 @@ import {
   saveFileToPath,
   createFile,
   isTauri,
+  markdownToHtml,
   type FileInfo,
 } from '@/lib/file-service'
 
@@ -428,16 +429,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   openFileFromDirectory: async (filePath: string) => {
     try {
-      const content = await readFileContent(filePath)
-      if (content === null) return
+      const markdown = await readFileContent(filePath)
+      if (markdown === null) return
 
       const fileName = filePath.split(/[/\\]/).pop() || 'Untitled'
       const title = fileName.replace(/\.md$/, '')
+      
+      // Convert markdown to HTML for the editor
+      const html = markdownToHtml(markdown)
 
       const document: Document = {
         id: generateId(),
         title,
-        content,
+        content: html,
         isPinned: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

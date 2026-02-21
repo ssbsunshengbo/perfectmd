@@ -19,8 +19,170 @@ export const isTauri = (): boolean => {
   return '__TAURI__' in window || '__TAURI_INTERNALS__' in window
 }
 
+// Convert Markdown to HTML for the rich text editor
+export function markdownToHtml(markdown: string): string {
+  if (!markdown) return '<p><br></p>'
+  
+  const lines = markdown.split('\n')
+  const htmlParts: string[] = []
+  let inCodeBlock = false
+  let codeContent: string[] = []
+  let codeLanguage = ''
+  let inList = false
+  let listType = ''
+  let listItems: string[] = []
+  let inBlockquote = false
+  let blockquoteLines: string[] = []
+  
+  const processInline = (text: string): string => {
+    return text
+      // Escape HTML entities first
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      // Bold **text** or __text__
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(.+?)__/g, '<strong>$1</strong>')
+      // Italic *text* or _text_ (not preceded by * or _)
+      .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+      .replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>')
+      // Strikethrough ~~text~~
+      .replace(/~~(.+?)~~/g, '<s>$1</s>')
+      // Underline ++text++
+      .replace(/\+\+(.+?)\+\+/g, '<u>$1</u>')
+      // Inline code `text`
+      .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
+      // Links [text](url)
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      // Images ![alt](url)
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />')
+  }
+  
+  const flushList = () => {
+    if (inList && listItems.length > 0) {
+      const tag = listType === 'ul' ? 'ul' : 'ol'
+      htmlParts.push(`<${tag}>${listItems.map(item => `<li>${item}</li>`).join('')}</${tag}>`)
+      listItems = []
+      inList = false
+      listType = ''
+    }
+  }
+  
+  const flushBlockquote = () => {
+    if (inBlockquote && blockquoteLines.length > 0) {
+      htmlParts.push(`<blockquote>${blockquoteLines.join('<br>')}</blockquote>`)
+      blockquoteLines = []
+      inBlockquote = false
+    }
+  }
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    
+    // Code block with language
+    const codeBlockMatch = line.match(/^```(\w*)$/)
+    if (codeBlockMatch) {
+      if (inCodeBlock) {
+        htmlParts.push(`<pre><code>${codeContent.join('\n')}</code></pre>`)
+        codeContent = []
+        codeLanguage = ''
+        inCodeBlock = false
+      } else {
+        flushList()
+        flushBlockquote()
+        inCodeBlock = true
+        codeLanguage = codeBlockMatch[1] || ''
+      }
+      continue
+    }
+    
+    if (inCodeBlock) {
+      codeContent.push(line.replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+      continue
+    }
+    
+    // Horizontal rule
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
+      flushList()
+      flushBlockquote()
+      htmlParts.push('<hr>')
+      continue
+    }
+    
+    // Headings
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/)
+    if (headingMatch) {
+      flushList()
+      flushBlockquote()
+      const level = headingMatch[1].length
+      const text = processInline(headingMatch[2])
+      htmlParts.push(`<h${level}>${text}</h${level}>`)
+      continue
+    }
+    
+    // Blockquote
+    if (line.startsWith('> ')) {
+      flushList()
+      inBlockquote = true
+      const text = processInline(line.substring(2))
+      blockquoteLines.push(text)
+      continue
+    }
+    
+    // Unordered list
+    const ulMatch = line.match(/^[-*+]\s+(.+)$/)
+    if (ulMatch) {
+      flushBlockquote()
+      if (!inList || listType !== 'ul') {
+        flushList()
+        inList = true
+        listType = 'ul'
+      }
+      listItems.push(processInline(ulMatch[1]))
+      continue
+    }
+    
+    // Ordered list
+    const olMatch = line.match(/^(\d+)\.\s+(.+)$/)
+    if (olMatch) {
+      flushBlockquote()
+      if (!inList || listType !== 'ol') {
+        flushList()
+        inList = true
+        listType = 'ol'
+      }
+      listItems.push(processInline(olMatch[2]))
+      continue
+    }
+    
+    // Empty line
+    if (line.trim() === '') {
+      flushList()
+      flushBlockquote()
+      continue
+    }
+    
+    // Regular paragraph
+    flushList()
+    flushBlockquote()
+    const text = processInline(line)
+    htmlParts.push(`<p>${text}</p>`)
+  }
+  
+  // Flush remaining content
+  flushList()
+  flushBlockquote()
+  
+  // Handle code block not closed
+  if (inCodeBlock && codeContent.length > 0) {
+    htmlParts.push(`<pre><code>${codeContent.join('\n')}</code></pre>`)
+  }
+  
+  return htmlParts.length > 0 ? htmlParts.join('') : '<p><br></p>'
+}
+
 // Import MD file
-export async function importMarkdownFile(): Promise<{ content: string; name: string } | null> {
+export async function importMarkdownFile(): Promise<{ content: string; name: string; isHtml: boolean } | null> {
   if (isTauri()) {
     return importMarkdownFileTauri()
   } else {
@@ -28,7 +190,7 @@ export async function importMarkdownFile(): Promise<{ content: string; name: str
   }
 }
 
-async function importMarkdownFileWeb(): Promise<{ content: string; name: string } | null> {
+async function importMarkdownFileWeb(): Promise<{ content: string; name: string; isHtml: boolean } | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -39,14 +201,15 @@ async function importMarkdownFileWeb(): Promise<{ content: string; name: string 
         resolve(null)
         return
       }
-      const content = await file.text()
-      resolve({ content, name: file.name.replace(/\.(md|markdown|txt)$/, '') })
+      const markdown = await file.text()
+      const html = markdownToHtml(markdown)
+      resolve({ content: html, name: file.name.replace(/\.(md|markdown|txt)$/, ''), isHtml: true })
     }
     input.click()
   })
 }
 
-async function importMarkdownFileTauri(): Promise<{ content: string; name: string } | null> {
+async function importMarkdownFileTauri(): Promise<{ content: string; name: string; isHtml: boolean } | null> {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog')
     const { readFile } = await import('@tauri-apps/plugin-fs')
@@ -62,11 +225,12 @@ async function importMarkdownFileTauri(): Promise<{ content: string; name: strin
 
     const content = await readFile(selected)
     const decoder = new TextDecoder()
-    const text = decoder.decode(content)
+    const markdown = decoder.decode(content)
+    const html = markdownToHtml(markdown)
 
     const name = selected.split(/[/\\]/).pop()?.replace(/\.(md|markdown|txt)$/, '') || 'Untitled'
 
-    return { content: text, name }
+    return { content: html, name, isHtml: true }
   } catch (error) {
     console.error('Failed to import file:', error)
     return null

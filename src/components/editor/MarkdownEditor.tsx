@@ -638,22 +638,28 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     return true
   }, [getCurrentBlock])
 
+  // Track previous content to detect external changes
+  const prevContentRef = useRef(content)
+
   // Sync content to editor when it changes externally
   useEffect(() => {
-    if (editorRef.current && !isInternalChange.current) {
+    if (editorRef.current) {
+      // Check if content changed from outside (like import)
+      const isExternalChange = prevContentRef.current !== content && !isInternalChange.current
       const currentHtml = editorRef.current.innerHTML
-      // Only update if the content is different and editor is not focused
-      if (document.activeElement !== editorRef.current && currentHtml !== content) {
+      
+      if (isExternalChange || (document.activeElement !== editorRef.current && currentHtml !== content)) {
         editorRef.current.innerHTML = content || '<p><br></p>'
       }
     }
+    prevContentRef.current = content
     isInternalChange.current = false
   }, [content])
 
   // Initialize editor content
   useEffect(() => {
-    if (editorRef.current && content) {
-      editorRef.current.innerHTML = content
+    if (editorRef.current) {
+      editorRef.current.innerHTML = content || '<p><br></p>'
     }
     // Make Enter always create a new <p> block instead of inserting <br>,
     // so each line lives in its own block element.
@@ -1040,6 +1046,18 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           const event = new CustomEvent('save-document')
           window.dispatchEvent(event)
           break
+        case 'z':
+          // Allow native undo (Ctrl+Z / Ctrl+Shift+Z)
+          if (e.shiftKey) {
+            // Ctrl+Shift+Z = Redo
+            document.execCommand('redo', false)
+          }
+          // Let browser handle native undo/redo
+          return
+        case 'y':
+          // Ctrl+Y = Redo (Windows convention)
+          document.execCommand('redo', false)
+          return
       }
     }
 
