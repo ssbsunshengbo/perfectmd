@@ -891,7 +891,14 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         if (selection.isCollapsed || !selectedText) {
           break
         }
-        wrapSelectionWithStyle('color', value || 'inherit', 'inherit')
+        // When clearing color (value === 'inherit'), set to default color instead
+        if (value === 'inherit') {
+          const isDarkMode = document.documentElement.classList.contains('dark')
+          const defaultColor = isDarkMode ? '#ffffff' : '#000000'
+          wrapSelectionWithStyle('color', defaultColor, 'inherit')
+        } else {
+          wrapSelectionWithStyle('color', value, 'inherit')
+        }
         // Prevent following typing from inheriting color style context.
         selection.collapseToEnd()
         ensureCaretOutsideInlineFormatting()
