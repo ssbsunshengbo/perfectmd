@@ -802,23 +802,63 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
 
       const range = selection.getRangeAt(0)
       const extracted = range.extractContents()
-      const span = document.createElement('span')
 
+      // When clearing color, remove color styles from the content
       if (value === clearToken) {
-        span.style[property] = property === 'color' ? 'inherit' : 'transparent'
+        // Create a temporary container to process the content
+        const tempDiv = document.createElement('div')
+        tempDiv.appendChild(extracted)
+
+        // Remove color/background styles from all elements
+        const elements = tempDiv.querySelectorAll('[style*="color"], [style*="background"]')
+        elements.forEach((el) => {
+          const htmlEl = el as HTMLElement
+          if (property === 'color') {
+            htmlEl.style.removeProperty('color')
+          } else {
+            htmlEl.style.removeProperty('background-color')
+            htmlEl.style.removeProperty('background')
+          }
+          // If element has no style left, unwrap it
+          if (!htmlEl.getAttribute('style') || htmlEl.getAttribute('style')?.trim() === '') {
+            htmlEl.replaceWith(...Array.from(htmlEl.childNodes))
+          }
+        })
+
+        // Also handle font elements (legacy color elements)
+        const fontElements = tempDiv.querySelectorAll('font[color]')
+        fontElements.forEach((el) => {
+          if (property === 'color') {
+            el.removeAttribute('color')
+          }
+          if (!el.hasAttributes()) {
+            el.replaceWith(...Array.from(el.childNodes))
+          }
+        })
+
+        // Insert the cleaned content
+        range.insertNode(tempDiv)
+
+        // Collapse caret to end
+        const caret = document.createRange()
+        caret.selectNodeContents(tempDiv)
+        caret.collapse(false)
+        selection.removeAllRanges()
+        selection.addRange(caret)
       } else {
+        // Apply new color
+        const span = document.createElement('span')
         span.style[property] = value
+        span.appendChild(extracted)
+        range.insertNode(span)
+
+        // Collapse caret to end so subsequent typing starts outside selection.
+        const caret = document.createRange()
+        caret.setStartAfter(span)
+        caret.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(caret)
       }
-
-      span.appendChild(extracted)
-      range.insertNode(span)
-
-      // Collapse caret to end so subsequent typing starts outside selection.
-      const caret = document.createRange()
-      caret.setStartAfter(span)
-      caret.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(caret)
 
       return true
     },
