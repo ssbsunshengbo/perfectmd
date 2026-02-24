@@ -368,19 +368,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     try {
       // If in file system mode with a file path, save directly
       if (isFileSystemMode && currentFilePath) {
-        return await saveFileToPath(currentFilePath, currentDocument.content)
+        const success = await saveFileToPath(currentFilePath, currentDocument.content)
+        if (success) {
+          console.log('File saved to:', currentFilePath)
+        }
+        return success
       }
 
       // Otherwise, use save dialog
       const path = await saveMarkdownFile(currentDocument.content, currentDocument.title)
       if (path) {
+        console.log('File saved to:', path)
         set({ currentFilePath: path })
         return true
       }
       return false
     } catch (error) {
       console.error('Failed to save file:', error)
-      return false
+      throw error // Re-throw to let caller show error message
     }
   },
 

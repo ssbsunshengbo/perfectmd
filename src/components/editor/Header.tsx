@@ -85,9 +85,16 @@ export function Header() {
   }
 
   const handleSaveFile = async () => {
-    const success = await saveCurrentFile()
-    if (success) {
-      toast.success('File saved')
+    try {
+      const success = await saveCurrentFile()
+      if (success) {
+        toast.success('File saved successfully')
+      } else {
+        // User cancelled the save dialog, no error
+      }
+    } catch (error) {
+      console.error('Save file error:', error)
+      toast.error(`Failed to save file: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

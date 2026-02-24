@@ -14,374 +14,195 @@ export interface CssTemplate {
 
 export const cssTemplates: CssTemplate[] = [
   {
-    id: 'blue-gradient',
-    name: '蓝白渐变背景',
-    description: '清爽的蓝色渐变背景，适合长时间阅读',
+    id: 'sky-gradient',
+    name: '天空渐变',
+    description: '清爽的蓝白渐变，如晴朗天空般舒适',
     preview: {
-      bgColor: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%)',
+      bgColor: 'linear-gradient(180deg, #e0f4ff 0%, #b8e4ff 50%, #87ceeb 100%)',
       textColor: '#1e3a5f',
-      accentColor: '#0284c7'
+      accentColor: '#0066cc'
     },
-    css: `/* 蓝白渐变背景主题 */
+    css: `/* 天空渐变主题 - 蓝白渐变背景 */
 .prose-editor {
-  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%);
+  background: linear-gradient(180deg, #e0f4ff 0%, #b8e4ff 50%, #87ceeb 100%);
   min-height: 100%;
-  padding: 40px;
-  border-radius: 8px;
+  padding: 48px 56px;
+  border-radius: 12px;
+  position: relative;
 }
 
 .prose-editor {
   color: #1e3a5f;
-  font-family: 'Georgia', 'Noto Serif SC', serif;
+  font-family: 'SF Pro Display', -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
   font-size: 16px;
   line-height: 1.8;
 }
 
 .prose-editor h1 {
-  color: #0c4a6e;
-  font-size: 2em;
+  color: #0a2540;
+  font-size: 2.25em;
   font-weight: 700;
-  border-bottom: 2px solid #0284c7;
-  padding-bottom: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 3px solid #0066cc;
+  position: relative;
+}
+
+.prose-editor h1::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  width: 60px;
+  height: 3px;
+  background: #00a3ff;
 }
 
 .prose-editor h2 {
-  color: #075985;
-  font-size: 1.5em;
-  border-bottom: 1px solid #38bdf8;
-  padding-bottom: 8px;
+  color: #0d4f8b;
+  font-size: 1.6em;
+  font-weight: 600;
+  margin-top: 36px;
+  margin-bottom: 16px;
+  padding-left: 16px;
+  border-left: 4px solid #00a3ff;
 }
 
 .prose-editor h3 {
-  color: #0369a1;
-  font-size: 1.25em;
+  color: #1565a8;
+  font-size: 1.3em;
+  font-weight: 600;
+  margin-top: 28px;
+  margin-bottom: 12px;
 }
 
 .prose-editor p {
-  margin: 1em 0;
+  margin: 1.2em 0;
+  text-align: justify;
 }
 
 .prose-editor a {
-  color: #0284c7;
-  text-decoration: underline;
+  color: #0066cc;
+  text-decoration: none;
+  border-bottom: 1px dashed #00a3ff;
+  transition: all 0.2s ease;
+}
+
+.prose-editor a:hover {
+  color: #00a3ff;
+  border-bottom-style: solid;
 }
 
 .prose-editor blockquote {
-  border-left: 4px solid #0284c7;
-  background: rgba(255, 255, 255, 0.5);
-  padding: 15px 20px;
-  margin: 20px 0;
-  border-radius: 0 8px 8px 0;
-  color: #334155;
+  border-left: 4px solid #00a3ff;
+  background: linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.4) 100%);
+  backdrop-filter: blur(8px);
+  padding: 20px 24px;
+  margin: 24px 0;
+  border-radius: 0 12px 12px 0;
+  color: #2d5a87;
+  font-style: italic;
 }
 
 .prose-editor code {
-  background: rgba(14, 116, 144, 0.1);
-  color: #0e7490;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'Fira Code', 'Consolas', monospace;
+  background: linear-gradient(135deg, #e6f3ff 0%, #cce7ff 100%);
+  color: #0066cc;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.9em;
 }
 
 .prose-editor pre {
-  background: #0f172a;
-  color: #e2e8f0;
-  padding: 20px;
-  border-radius: 8px;
+  background: linear-gradient(180deg, #0d253f 0%, #1a365d 100%);
+  color: #e0f0ff;
+  padding: 24px;
+  margin: 24px 0;
+  border-radius: 12px;
   overflow-x: auto;
+  box-shadow: 0 8px 32px rgba(0, 102, 204, 0.15);
 }
 
 .prose-editor pre code {
   background: transparent;
   color: inherit;
   padding: 0;
+  font-size: 0.95em;
 }
 
 .prose-editor ul, .prose-editor ol {
-  padding-left: 25px;
+  padding-left: 28px;
+  margin: 16px 0;
 }
 
 .prose-editor li {
-  margin: 8px 0;
+  margin: 10px 0;
+  position: relative;
+}
+
+.prose-editor ul li::marker {
+  color: #00a3ff;
+}
+
+.prose-editor ol li::marker {
+  color: #0066cc;
+  font-weight: 600;
 }
 
 .prose-editor hr {
   border: none;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #0284c7, transparent);
-  margin: 30px 0;
+  background: linear-gradient(90deg, transparent 0%, #00a3ff 50%, transparent 100%);
+  margin: 40px 0;
 }
 
-/* 选中文本样式 */
-::selection {
-  background: #0284c7;
-  color: white;
-}`
-  },
-  {
-    id: 'paper-style',
-    name: '纸张风格',
-    description: '模拟真实纸张效果，柔和护眼',
-    preview: {
-      bgColor: '#f5f5dc',
-      textColor: '#3d3d3d',
-      accentColor: '#8b4513'
-    },
-    css: `/* 纸张风格主题 - 模拟真实纸张 */
-.prose-editor {
-  background: #faf8f0;
-  min-height: 100%;
-  padding: 50px 60px;
-  box-shadow: 
-    0 0 10px rgba(0,0,0,0.05),
-    inset 0 0 80px rgba(0,0,0,0.02);
-  border-radius: 4px;
-  position: relative;
-}
-
-/* 添加纸张线条效果 */
-.prose-editor::before {
-  content: '';
-  position: absolute;
-  left: 50px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: rgba(255, 100, 100, 0.3);
-}
-
-.prose-editor {
-  color: #2d2d2d;
-  font-family: 'Times New Roman', 'Noto Serif SC', serif;
-  font-size: 16px;
-  line-height: 2;
-}
-
-.prose-editor h1 {
-  color: #8b4513;
-  font-size: 2em;
-  font-weight: bold;
-  text-align: center;
-  margin-bottom: 30px;
-  padding-bottom: 15px;
-  border-bottom: 3px double #8b4513;
-}
-
-.prose-editor h2 {
-  color: #5d3a1a;
-  font-size: 1.5em;
-  margin-top: 30px;
-  border-bottom: 1px solid #ccc;
-  padding-bottom: 8px;
-}
-
-.prose-editor h3 {
-  color: #4a3520;
-  font-size: 1.25em;
-}
-
-.prose-editor p {
-  text-indent: 2em;
-  margin: 1em 0;
-}
-
-.prose-editor a {
-  color: #8b4513;
-  text-decoration: underline;
-}
-
-.prose-editor blockquote {
-  border-left: 4px solid #8b4513;
-  background: #fffef5;
-  padding: 15px 25px;
-  margin: 20px 30px;
-  font-style: italic;
-  color: #555;
-}
-
-.prose-editor code {
-  background: #f0ebe0;
-  color: #8b4513;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: 'Courier New', monospace;
-}
-
-.prose-editor pre {
-  background: #2d2d2d;
-  color: #f8f8f2;
-  padding: 20px 25px;
-  margin: 20px 30px;
-  border-radius: 4px;
-  overflow-x: auto;
-}
-
-.prose-editor pre code {
-  background: transparent;
-  color: inherit;
-}
-
-.prose-editor ul, .prose-editor ol {
-  padding-left: 30px;
-  text-indent: 0;
-}
-
-.prose-editor li {
-  margin: 5px 0;
-}
-
-/* 选中文本样式 */
-::selection {
-  background: #d4a574;
-  color: white;
-}`
-  },
-  {
-    id: 'dark-elegant',
-    name: '暗黑优雅',
-    description: '深色背景，适合夜间写作',
-    preview: {
-      bgColor: '#1a1a2e',
-      textColor: '#eaeaea',
-      accentColor: '#e94560'
-    },
-    css: `/* 暗黑优雅主题 - 深色背景 */
-.prose-editor {
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-  min-height: 100%;
-  padding: 40px;
-  border-radius: 8px;
-}
-
-.prose-editor {
-  color: #eaeaea;
-  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-  font-size: 16px;
-  line-height: 1.8;
-}
-
-.prose-editor h1 {
-  color: #ffffff;
-  font-size: 2.2em;
+.prose-editor strong {
+  color: #0a2540;
   font-weight: 600;
-  background: linear-gradient(90deg, #e94560, #0f3460);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 25px;
 }
 
-.prose-editor h2 {
-  color: #e94560;
-  font-size: 1.6em;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e94560;
-}
-
-.prose-editor h3 {
-  color: #f1f1f1;
-  font-size: 1.3em;
-}
-
-.prose-editor p {
-  margin: 1em 0;
-}
-
-.prose-editor a {
-  color: #4fc3f7;
-  text-decoration: none;
-  border-bottom: 1px dashed #4fc3f7;
-}
-
-.prose-editor a:hover {
-  color: #81d4fa;
-  border-bottom-style: solid;
-}
-
-.prose-editor blockquote {
-  border-left: 4px solid #e94560;
-  background: rgba(233, 69, 96, 0.1);
-  padding: 15px 20px;
-  margin: 20px 0;
-  border-radius: 0 8px 8px 0;
-  color: #b0b0b0;
-}
-
-.prose-editor code {
-  background: rgba(79, 195, 247, 0.15);
-  color: #4fc3f7;
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-family: 'Fira Code', monospace;
-}
-
-.prose-editor pre {
-  background: #0d0d1a;
-  border: 1px solid #333;
-  padding: 20px;
-  border-radius: 8px;
-  overflow-x: auto;
-}
-
-.prose-editor pre code {
-  background: transparent;
-  color: #eaeaea;
-  padding: 0;
-}
-
-.prose-editor ul, .prose-editor ol {
-  padding-left: 25px;
-}
-
-.prose-editor li::marker {
-  color: #e94560;
-}
-
-.prose-editor hr {
-  border: none;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #e94560, transparent);
-  margin: 30px 0;
+.prose-editor em {
+  color: #1565a8;
 }
 
 /* 选中文本样式 */
 ::selection {
-  background: #e94560;
-  color: white;
+  background: rgba(0, 163, 255, 0.3);
+  color: #0a2540;
 }`
   },
   {
-    id: 'nature-green',
-    name: '自然绿意',
-    description: '清新的绿色调，回归自然',
+    id: 'sunset-amber',
+    name: '琥珀黄昏',
+    description: '温暖的琥珀色调，如夕阳般温馨舒适',
     preview: {
-      bgColor: '#e8f5e9',
-      textColor: '#1b5e20',
-      accentColor: '#4caf50'
+      bgColor: 'linear-gradient(180deg, #fff8e7 0%, #ffefc7 50%, #ffe4b5 100%)',
+      textColor: '#4a3728',
+      accentColor: '#d97706'
     },
-    css: `/* 自然绿意主题 - 清新绿色调 */
+    css: `/* 琥珀黄昏主题 - 温暖琥珀色调 */
 .prose-editor {
-  background: linear-gradient(to bottom, #e8f5e9 0%, #c8e6c9 100%);
+  background: linear-gradient(180deg, #fff8e7 0%, #ffefc7 50%, #ffe4b5 100%);
   min-height: 100%;
-  padding: 40px;
-  border-radius: 8px;
+  padding: 48px 56px;
+  border-radius: 12px;
 }
 
 .prose-editor {
-  color: #1b5e20;
-  font-family: 'Palatino Linotype', 'Book Antiqua', 'Noto Serif SC', serif;
-  font-size: 16px;
+  color: #4a3728;
+  font-family: 'Crimson Pro', 'Noto Serif SC', 'Source Han Serif SC', serif;
+  font-size: 17px;
   line-height: 1.9;
 }
 
 .prose-editor h1 {
-  color: #1b5e20;
-  font-size: 2em;
+  color: #78350f;
+  font-size: 2.25em;
+  font-weight: 700;
   text-align: center;
-  margin-bottom: 25px;
+  margin-bottom: 36px;
+  padding-bottom: 20px;
   position: relative;
-  padding-bottom: 15px;
 }
 
 .prose-editor h1::after {
@@ -390,238 +211,175 @@ export const cssTemplates: CssTemplate[] = [
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 60px;
+  width: 80px;
   height: 3px;
-  background: linear-gradient(90deg, #4caf50, #81c784);
+  background: linear-gradient(90deg, #d97706, #f59e0b, #d97706);
   border-radius: 2px;
 }
 
 .prose-editor h2 {
-  color: #2e7d32;
-  font-size: 1.5em;
-  margin-top: 30px;
-  padding-left: 15px;
-  border-left: 4px solid #4caf50;
-}
-
-.prose-editor h3 {
-  color: #388e3c;
-  font-size: 1.25em;
-  padding-left: 10px;
-  border-left: 3px solid #81c784;
-}
-
-.prose-editor p {
-  margin: 1em 0;
-}
-
-.prose-editor a {
-  color: #2e7d32;
-  text-decoration: underline;
-  text-decoration-color: #81c784;
-}
-
-.prose-editor blockquote {
-  border-left: 4px solid #4caf50;
-  background: rgba(255, 255, 255, 0.6);
-  padding: 15px 20px;
-  margin: 20px 0;
-  border-radius: 0 8px 8px 0;
-  color: #2e7d32;
-}
-
-.prose-editor code {
-  background: rgba(76, 175, 80, 0.15);
-  color: #2e7d32;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'Consolas', monospace;
-}
-
-.prose-editor pre {
-  background: #1b5e20;
-  color: #e8f5e9;
-  padding: 20px;
-  border-radius: 8px;
-  overflow-x: auto;
-}
-
-.prose-editor pre code {
-  background: transparent;
-  color: inherit;
-}
-
-.prose-editor ul, .prose-editor ol {
-  padding-left: 25px;
-}
-
-.prose-editor li::marker {
-  color: #4caf50;
-}
-
-/* 选中文本样式 */
-::selection {
-  background: #4caf50;
-  color: white;
-}`
-  },
-  {
-    id: 'sunset-warm',
-    name: '暖阳黄昏',
-    description: '温暖的橙黄调，舒适惬意',
-    preview: {
-      bgColor: '#fff3e0',
-      textColor: '#5d4037',
-      accentColor: '#ff9800'
-    },
-    css: `/* 暖阳黄昏主题 - 温暖橙黄色调 */
-.prose-editor {
-  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 50%, #ffe0b2 100%);
-  min-height: 100%;
-  padding: 40px;
-  border-radius: 8px;
-}
-
-.prose-editor {
-  color: #5d4037;
-  font-family: 'Georgia', 'Noto Serif SC', serif;
-  font-size: 16px;
-  line-height: 1.8;
-}
-
-.prose-editor h1 {
-  color: #e65100;
-  font-size: 2em;
-  font-weight: bold;
-  text-align: center;
-  margin-bottom: 25px;
-  text-shadow: 1px 1px 2px rgba(230, 81, 0, 0.2);
-}
-
-.prose-editor h2 {
-  color: #ef6c00;
-  font-size: 1.5em;
-  border-bottom: 2px solid #ffcc80;
+  color: #92400e;
+  font-size: 1.6em;
+  font-weight: 600;
+  margin-top: 36px;
+  margin-bottom: 16px;
   padding-bottom: 8px;
+  border-bottom: 2px solid #fbbf24;
 }
 
 .prose-editor h3 {
-  color: #f57c00;
-  font-size: 1.25em;
+  color: #a16207;
+  font-size: 1.3em;
+  font-weight: 600;
+  margin-top: 28px;
+  margin-bottom: 12px;
+  padding-left: 12px;
+  border-left: 3px solid #f59e0b;
 }
 
 .prose-editor p {
-  margin: 1em 0;
+  margin: 1.2em 0;
+  text-indent: 2em;
+  text-align: justify;
 }
 
 .prose-editor a {
-  color: #e65100;
+  color: #b45309;
   text-decoration: underline;
-  text-decoration-color: #ffb74d;
+  text-decoration-color: #fbbf24;
+  text-underline-offset: 3px;
+  transition: all 0.2s ease;
 }
 
 .prose-editor a:hover {
-  color: #bf360c;
+  color: #92400e;
+  text-decoration-color: #d97706;
 }
 
 .prose-editor blockquote {
-  border-left: 4px solid #ff9800;
-  background: rgba(255, 255, 255, 0.5);
-  padding: 15px 20px;
-  margin: 20px 0;
-  border-radius: 0 8px 8px 0;
-  color: #6d4c41;
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(251,191,36,0.15) 100%);
+  padding: 20px 24px;
+  margin: 24px 0;
+  border-radius: 0 12px 12px 0;
+  color: #78350f;
   font-style: italic;
 }
 
 .prose-editor code {
-  background: rgba(255, 152, 0, 0.2);
-  color: #e65100;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'Consolas', monospace;
+  background: rgba(251, 191, 36, 0.25);
+  color: #92400e;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9em;
 }
 
 .prose-editor pre {
-  background: #3e2723;
-  color: #fff8e1;
-  padding: 20px;
-  border-radius: 8px;
+  background: linear-gradient(180deg, #292524 0%, #44403c 100%);
+  color: #fef3c7;
+  padding: 24px;
+  margin: 24px 0;
+  border-radius: 12px;
   overflow-x: auto;
+  box-shadow: 0 8px 32px rgba(120, 53, 15, 0.15);
 }
 
 .prose-editor pre code {
   background: transparent;
   color: inherit;
+  padding: 0;
 }
 
 .prose-editor ul, .prose-editor ol {
-  padding-left: 25px;
+  padding-left: 28px;
+  margin: 16px 0;
 }
 
-.prose-editor li::marker {
-  color: #ff9800;
+.prose-editor li {
+  margin: 10px 0;
+}
+
+.prose-editor ul li::marker {
+  color: #f59e0b;
 }
 
 .prose-editor hr {
   border: none;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #ff9800, transparent);
-  margin: 30px 0;
+  background: linear-gradient(90deg, transparent, #fbbf24, transparent);
+  margin: 40px 0;
+}
+
+.prose-editor strong {
+  color: #78350f;
+  font-weight: 700;
 }
 
 /* 选中文本样式 */
 ::selection {
-  background: #ff9800;
-  color: white;
+  background: rgba(251, 191, 36, 0.4);
+  color: #4a3728;
 }`
   },
   {
-    id: 'minimalist',
-    name: '极简纯净',
-    description: '极简设计，专注内容',
+    id: 'forest-mint',
+    name: '森林薄荷',
+    description: '清新的薄荷绿色调，自然护眼',
     preview: {
-      bgColor: '#ffffff',
-      textColor: '#333333',
-      accentColor: '#666666'
+      bgColor: 'linear-gradient(180deg, #f0fdf4 0%, #dcfce7 50%, #bbf7d0 100%)',
+      textColor: '#14532d',
+      accentColor: '#16a34a'
     },
-    css: `/* 极简纯净主题 - 简约设计 */
+    css: `/* 森林薄荷主题 - 清新绿色调 */
 .prose-editor {
-  background: #ffffff;
+  background: linear-gradient(180deg, #f0fdf4 0%, #dcfce7 50%, #bbf7d0 100%);
   min-height: 100%;
-  padding: 50px 60px;
+  padding: 48px 56px;
+  border-radius: 12px;
 }
 
 .prose-editor {
-  color: #333333;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+  color: #14532d;
+  font-family: 'Merriweather', 'Noto Serif SC', serif;
   font-size: 16px;
-  line-height: 1.7;
-  font-weight: 400;
+  line-height: 1.85;
 }
 
 .prose-editor h1 {
-  color: #111111;
-  font-size: 2.2em;
-  font-weight: 600;
-  margin-bottom: 30px;
-  letter-spacing: -0.02em;
+  color: #052e16;
+  font-size: 2.25em;
+  font-weight: 700;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 3px solid #16a34a;
+  position: relative;
+}
+
+.prose-editor h1::after {
+  content: '🌿';
+  position: absolute;
+  right: 0;
+  bottom: 16px;
+  font-size: 0.5em;
 }
 
 .prose-editor h2 {
-  color: #222222;
+  color: #166534;
   font-size: 1.6em;
   font-weight: 600;
-  margin-top: 35px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e0e0e0;
+  margin-top: 36px;
+  margin-bottom: 16px;
+  padding-left: 16px;
+  border-left: 4px solid #22c55e;
 }
 
 .prose-editor h3 {
-  color: #333333;
+  color: #15803d;
   font-size: 1.3em;
   font-weight: 600;
-  margin-top: 25px;
+  margin-top: 28px;
+  margin-bottom: 12px;
 }
 
 .prose-editor p {
@@ -629,305 +387,577 @@ export const cssTemplates: CssTemplate[] = [
 }
 
 .prose-editor a {
-  color: #333333;
-  text-decoration: underline;
-  text-decoration-color: #999;
-  text-underline-offset: 3px;
+  color: #16a34a;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: border-color 0.2s ease;
 }
 
 .prose-editor a:hover {
-  text-decoration-color: #333;
+  border-bottom-color: #22c55e;
 }
 
 .prose-editor blockquote {
-  border-left: 3px solid #ddd;
-  padding: 10px 0 10px 20px;
-  margin: 20px 0;
-  color: #666;
+  border-left: 4px solid #22c55e;
+  background: linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(187,247,208,0.4) 100%);
+  padding: 20px 24px;
+  margin: 24px 0;
+  border-radius: 0 12px 12px 0;
+  color: #166534;
 }
 
 .prose-editor code {
-  background: #f5f5f5;
-  color: #333;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: 'SF Mono', 'Consolas', monospace;
+  background: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
   font-size: 0.9em;
 }
 
 .prose-editor pre {
-  background: #fafafa;
-  border: 1px solid #eee;
-  padding: 20px;
-  border-radius: 4px;
+  background: linear-gradient(180deg, #052e16 0%, #14532d 100%);
+  color: #dcfce7;
+  padding: 24px;
+  margin: 24px 0;
+  border-radius: 12px;
   overflow-x: auto;
+  box-shadow: 0 8px 32px rgba(22, 163, 74, 0.15);
 }
 
 .prose-editor pre code {
   background: transparent;
+  color: inherit;
   padding: 0;
 }
 
 .prose-editor ul, .prose-editor ol {
-  padding-left: 25px;
+  padding-left: 28px;
+  margin: 16px 0;
 }
 
 .prose-editor li {
-  margin: 6px 0;
+  margin: 10px 0;
+}
+
+.prose-editor ul li::marker {
+  color: #22c55e;
+}
+
+.prose-editor ol li::marker {
+  color: #16a34a;
+  font-weight: 600;
 }
 
 .prose-editor hr {
   border: none;
-  height: 1px;
-  background: #e0e0e0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #22c55e, transparent);
   margin: 40px 0;
+}
+
+.prose-editor strong {
+  color: #052e16;
+  font-weight: 700;
+}
+
+/* 表格样式 */
+.prose-editor table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 24px 0;
+}
+
+.prose-editor th, .prose-editor td {
+  border: 1px solid #86efac;
+  padding: 12px 16px;
+}
+
+.prose-editor th {
+  background: rgba(34, 197, 94, 0.15);
+  color: #166534;
+  font-weight: 600;
+}
+
+.prose-editor tr:nth-child(even) {
+  background: rgba(187, 247, 208, 0.3);
 }
 
 /* 选中文本样式 */
 ::selection {
-  background: #b3d9ff;
-  color: #000;
+  background: rgba(34, 197, 94, 0.35);
+  color: #052e16;
 }`
   },
   {
     id: 'ocean-deep',
-    name: '深海幽蓝',
-    description: '深邃的海洋蓝色，宁静致远',
+    name: '深海夜话',
+    description: '深邃的海洋深色调，适合夜间专注写作',
     preview: {
-      bgColor: '#0a192f',
-      textColor: '#8892b0',
-      accentColor: '#64ffda'
+      bgColor: 'linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+      textColor: '#cbd5e1',
+      accentColor: '#38bdf8'
     },
-    css: `/* 深海幽蓝主题 - 深蓝色调 */
+    css: `/* 深海夜话主题 - 深色调护眼 */
 .prose-editor {
-  background: linear-gradient(180deg, #0a192f 0%, #112240 100%);
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
   min-height: 100%;
-  padding: 40px;
-  border-radius: 8px;
+  padding: 48px 56px;
+  border-radius: 12px;
 }
 
 .prose-editor {
-  color: #8892b0;
-  font-family: 'SF Pro Display', -apple-system, 'Segoe UI', sans-serif;
+  color: #cbd5e1;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, 'PingFang SC', sans-serif;
   font-size: 16px;
-  line-height: 1.8;
+  line-height: 1.85;
 }
 
 .prose-editor h1 {
-  color: #ccd6f6;
-  font-size: 2.2em;
+  color: #f1f5f9;
+  font-size: 2.25em;
   font-weight: 700;
-  margin-bottom: 30px;
-}
-
-.prose-editor h2 {
-  color: #a8b2d1;
-  font-size: 1.6em;
-  font-weight: 600;
-  margin-top: 35px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #233554;
-}
-
-.prose-editor h3 {
-  color: #ccd6f6;
-  font-size: 1.3em;
-  font-weight: 600;
-}
-
-.prose-editor p {
-  margin: 1em 0;
-}
-
-.prose-editor a {
-  color: #64ffda;
-  text-decoration: none;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #38bdf8;
   position: relative;
 }
 
-.prose-editor a::after {
+.prose-editor h1::after {
   content: '';
   position: absolute;
   bottom: -2px;
   left: 0;
-  width: 0;
-  height: 1px;
-  background: #64ffda;
-  transition: width 0.3s;
-}
-
-.prose-editor a:hover::after {
-  width: 100%;
-}
-
-.prose-editor blockquote {
-  border-left: 3px solid #64ffda;
-  background: rgba(100, 255, 218, 0.05);
-  padding: 15px 20px;
-  margin: 20px 0;
-  border-radius: 0 4px 4px 0;
-  color: #a8b2d1;
-}
-
-.prose-editor code {
-  background: rgba(100, 255, 218, 0.1);
-  color: #64ffda;
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-}
-
-.prose-editor pre {
-  background: #112240;
-  border: 1px solid #233554;
-  padding: 20px;
-  border-radius: 8px;
-  overflow-x: auto;
-}
-
-.prose-editor pre code {
-  background: transparent;
-  color: #8892b0;
-  padding: 0;
-}
-
-.prose-editor ul, .prose-editor ol {
-  padding-left: 25px;
-}
-
-.prose-editor li::marker {
-  color: #64ffda;
-}
-
-.prose-editor hr {
-  border: none;
-  height: 1px;
-  background: #233554;
-  margin: 40px 0;
-}
-
-/* 选中文本样式 */
-::selection {
-  background: rgba(100, 255, 218, 0.3);
-  color: #ccd6f6;
-}`
-  },
-  {
-    id: 'purple-dream',
-    name: '梦幻紫罗兰',
-    description: '优雅的紫色调，浪漫梦幻',
-    preview: {
-      bgColor: '#2d1b4e',
-      textColor: '#e1d5f0',
-      accentColor: '#a855f7'
-    },
-    css: `/* 梦幻紫罗兰主题 - 浪漫紫色 */
-.prose-editor {
-  background: linear-gradient(135deg, #1e1133 0%, #2d1b4e 50%, #3d1f6d 100%);
-  min-height: 100%;
-  padding: 40px;
-  border-radius: 8px;
-}
-
-.prose-editor {
-  color: #e1d5f0;
-  font-family: 'Crimson Text', 'Noto Serif SC', serif;
-  font-size: 16px;
-  line-height: 1.8;
-}
-
-.prose-editor h1 {
-  color: #f3e8ff;
-  font-size: 2.2em;
-  font-weight: 700;
-  text-align: center;
-  margin-bottom: 30px;
-  background: linear-gradient(90deg, #c084fc, #a855f7, #9333ea);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  width: 100px;
+  height: 2px;
+  background: linear-gradient(90deg, #38bdf8, #06b6d4, #0891b2);
 }
 
 .prose-editor h2 {
-  color: #e9d5ff;
+  color: #e2e8f0;
   font-size: 1.6em;
   font-weight: 600;
-  margin-top: 35px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #7c3aed;
+  margin-top: 36px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #334155;
 }
 
 .prose-editor h3 {
-  color: #f3e8ff;
+  color: #94a3b8;
   font-size: 1.3em;
   font-weight: 600;
+  margin-top: 28px;
+  margin-bottom: 12px;
 }
 
 .prose-editor p {
-  margin: 1em 0;
+  margin: 1.2em 0;
 }
 
 .prose-editor a {
-  color: #c084fc;
+  color: #38bdf8;
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: border-color 0.3s;
+  transition: all 0.2s ease;
 }
 
 .prose-editor a:hover {
-  border-bottom-color: #c084fc;
+  color: #7dd3fc;
+  border-bottom-color: #38bdf8;
 }
 
 .prose-editor blockquote {
-  border-left: 3px solid #a855f7;
-  background: rgba(168, 85, 247, 0.1);
-  padding: 15px 20px;
-  margin: 20px 0;
-  border-radius: 0 8px 8px 0;
-  color: #d8b4fe;
+  border-left: 4px solid #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  padding: 20px 24px;
+  margin: 24px 0;
+  border-radius: 0 12px 12px 0;
+  color: #94a3b8;
 }
 
 .prose-editor code {
-  background: rgba(192, 132, 252, 0.2);
-  color: #e9d5ff;
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
   padding: 3px 8px;
-  border-radius: 4px;
-  font-family: 'Fira Code', monospace;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9em;
 }
 
 .prose-editor pre {
-  background: #1e1133;
-  border: 1px solid #581c87;
-  padding: 20px;
-  border-radius: 8px;
+  background: #020617;
+  border: 1px solid #1e293b;
+  padding: 24px;
+  margin: 24px 0;
+  border-radius: 12px;
   overflow-x: auto;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .prose-editor pre code {
   background: transparent;
-  color: #e1d5f0;
+  color: #e2e8f0;
   padding: 0;
 }
 
 .prose-editor ul, .prose-editor ol {
-  padding-left: 25px;
+  padding-left: 28px;
+  margin: 16px 0;
 }
 
-.prose-editor li::marker {
-  color: #c084fc;
+.prose-editor li {
+  margin: 10px 0;
+}
+
+.prose-editor ul li::marker {
+  color: #38bdf8;
+}
+
+.prose-editor ol li::marker {
+  color: #06b6d4;
+  font-weight: 600;
 }
 
 .prose-editor hr {
   border: none;
   height: 1px;
-  background: linear-gradient(90deg, transparent, #a855f7, transparent);
+  background: linear-gradient(90deg, transparent, #38bdf8, transparent);
   margin: 40px 0;
+}
+
+.prose-editor strong {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.prose-editor em {
+  color: #a5b4fc;
+}
+
+/* 表格样式 */
+.prose-editor table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 24px 0;
+}
+
+.prose-editor th, .prose-editor td {
+  border: 1px solid #334155;
+  padding: 12px 16px;
+}
+
+.prose-editor th {
+  background: rgba(56, 189, 248, 0.1);
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.prose-editor tr:nth-child(even) {
+  background: rgba(30, 41, 59, 0.5);
 }
 
 /* 选中文本样式 */
 ::selection {
-  background: rgba(168, 85, 247, 0.4);
+  background: rgba(56, 189, 248, 0.3);
+  color: #f1f5f9;
+}`
+  },
+  {
+    id: 'rose-garden',
+    name: '玫瑰花园',
+    description: '优雅的玫瑰粉色调，浪漫文艺',
+    preview: {
+      bgColor: 'linear-gradient(180deg, #fff1f2 0%, #ffe4e6 50%, #fecdd3 100%)',
+      textColor: '#4c0519',
+      accentColor: '#e11d48'
+    },
+    css: `/* 玫瑰花园主题 - 浪漫粉色调 */
+.prose-editor {
+  background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 50%, #fecdd3 100%);
+  min-height: 100%;
+  padding: 48px 56px;
+  border-radius: 12px;
+}
+
+.prose-editor {
+  color: #4c0519;
+  font-family: 'Playfair Display', 'Noto Serif SC', serif;
+  font-size: 16px;
+  line-height: 1.9;
+}
+
+.prose-editor h1 {
+  color: #881337;
+  font-size: 2.25em;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 36px;
+  padding-bottom: 20px;
+  position: relative;
+}
+
+.prose-editor h1::before,
+.prose-editor h1::after {
+  content: '❀';
+  position: absolute;
+  bottom: 20px;
+  font-size: 0.5em;
+  color: #e11d48;
+}
+
+.prose-editor h1::before {
+  left: calc(50% - 80px);
+}
+
+.prose-editor h1::after {
+  right: calc(50% - 80px);
+}
+
+.prose-editor h2 {
+  color: #9f1239;
+  font-size: 1.6em;
+  font-weight: 600;
+  margin-top: 36px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #fda4af;
+}
+
+.prose-editor h3 {
+  color: #be123c;
+  font-size: 1.3em;
+  font-weight: 600;
+  margin-top: 28px;
+  margin-bottom: 12px;
+}
+
+.prose-editor p {
+  margin: 1.2em 0;
+  text-indent: 2em;
+}
+
+.prose-editor a {
+  color: #be123c;
+  text-decoration: underline;
+  text-decoration-color: #fda4af;
+  text-underline-offset: 3px;
+  transition: all 0.2s ease;
+}
+
+.prose-editor a:hover {
+  color: #881337;
+  text-decoration-color: #e11d48;
+}
+
+.prose-editor blockquote {
+  border-left: 4px solid #e11d48;
+  background: linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(254,205,211,0.4) 100%);
+  padding: 20px 24px;
+  margin: 24px 0;
+  border-radius: 0 12px 12px 0;
+  color: #881337;
+  font-style: italic;
+}
+
+.prose-editor code {
+  background: rgba(225, 29, 72, 0.12);
+  color: #be123c;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.9em;
+}
+
+.prose-editor pre {
+  background: linear-gradient(180deg, #4c0519 0%, #881337 100%);
+  color: #ffe4e6;
+  padding: 24px;
+  margin: 24px 0;
+  border-radius: 12px;
+  overflow-x: auto;
+  box-shadow: 0 8px 32px rgba(136, 19, 55, 0.15);
+}
+
+.prose-editor pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.prose-editor ul, .prose-editor ol {
+  padding-left: 28px;
+  margin: 16px 0;
+}
+
+.prose-editor li {
+  margin: 10px 0;
+}
+
+.prose-editor ul li::marker {
+  color: #e11d48;
+}
+
+.prose-editor hr {
+  border: none;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #fda4af, transparent);
+  margin: 40px 0;
+}
+
+.prose-editor strong {
+  color: #881337;
+  font-weight: 700;
+}
+
+/* 选中文本样式 */
+::selection {
+  background: rgba(225, 29, 72, 0.25);
+  color: #4c0519;
+}`
+  },
+  {
+    id: 'lavender-dream',
+    name: '薰衣草梦境',
+    description: '宁静的紫色薰衣草色调，梦幻优雅',
+    preview: {
+      bgColor: 'linear-gradient(180deg, #faf5ff 0%, #f3e8ff 50%, #e9d5ff 100%)',
+      textColor: '#3b0764',
+      accentColor: '#9333ea'
+    },
+    css: `/* 薰衣草梦境主题 - 梦幻紫色调 */
+.prose-editor {
+  background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 50%, #e9d5ff 100%);
+  min-height: 100%;
+  padding: 48px 56px;
+  border-radius: 12px;
+}
+
+.prose-editor {
+  color: #3b0764;
+  font-family: 'Crimson Text', 'Noto Serif SC', serif;
+  font-size: 16px;
+  line-height: 1.85;
+}
+
+.prose-editor h1 {
+  color: #581c87;
+  font-size: 2.25em;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 36px;
+  padding-bottom: 20px;
+  position: relative;
+}
+
+.prose-editor h1::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 3px;
+  background: linear-gradient(90deg, #a855f7, #c084fc, #a855f7);
+  border-radius: 2px;
+}
+
+.prose-editor h2 {
+  color: #6b21a8;
+  font-size: 1.6em;
+  font-weight: 600;
+  margin-top: 36px;
+  margin-bottom: 16px;
+  padding-left: 16px;
+  border-left: 4px solid #a855f7;
+}
+
+.prose-editor h3 {
+  color: #7e22ce;
+  font-size: 1.3em;
+  font-weight: 600;
+  margin-top: 28px;
+  margin-bottom: 12px;
+}
+
+.prose-editor p {
+  margin: 1.2em 0;
+}
+
+.prose-editor a {
+  color: #7e22ce;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.prose-editor a:hover {
+  border-bottom-color: #a855f7;
+}
+
+.prose-editor blockquote {
+  border-left: 4px solid #a855f7;
+  background: linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(233,213,255,0.4) 100%);
+  padding: 20px 24px;
+  margin: 24px 0;
+  border-radius: 0 12px 12px 0;
+  color: #6b21a8;
+}
+
+.prose-editor code {
+  background: rgba(168, 85, 247, 0.15);
+  color: #7e22ce;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.9em;
+}
+
+.prose-editor pre {
+  background: linear-gradient(180deg, #2e1065 0%, #581c87 100%);
   color: #f3e8ff;
+  padding: 24px;
+  margin: 24px 0;
+  border-radius: 12px;
+  overflow-x: auto;
+  box-shadow: 0 8px 32px rgba(88, 28, 135, 0.15);
+}
+
+.prose-editor pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.prose-editor ul, .prose-editor ol {
+  padding-left: 28px;
+  margin: 16px 0;
+}
+
+.prose-editor li {
+  margin: 10px 0;
+}
+
+.prose-editor ul li::marker {
+  color: #a855f7;
+}
+
+.prose-editor hr {
+  border: none;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #c084fc, transparent);
+  margin: 40px 0;
+}
+
+.prose-editor strong {
+  color: #581c87;
+  font-weight: 700;
+}
+
+/* 选中文本样式 */
+::selection {
+  background: rgba(168, 85, 247, 0.3);
+  color: #3b0764;
 }`
   },
   {
@@ -1106,6 +1136,15 @@ export const cssDocumentation = `
 /* 分割线 */
 .prose-editor hr { }
 
+/* 加粗/斜体 */
+.prose-editor strong { }
+.prose-editor em { }
+
+/* 表格 */
+.prose-editor table { }
+.prose-editor th { }
+.prose-editor td { }
+
 /* 文本选中样式 */
 ::selection { }
 \`\`\`
@@ -1149,28 +1188,25 @@ box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 
 /* 文字阴影 */
 text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+
+/* 毛玻璃效果 */
+backdrop-filter: blur(10px);
 \`\`\`
 
 ### 实用技巧
 
 **1. 背景渐变**
 \`\`\`css
-background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 100%);
 \`\`\`
 
-**2. 毛玻璃效果**
-\`\`\`css
-background: rgba(255,255,255,0.7);
-backdrop-filter: blur(10px);
-\`\`\`
-
-**3. 标题下划线装饰**
+**2. 标题装饰线**
 \`\`\`css
 border-bottom: 2px solid #007bff;
 padding-bottom: 10px;
 \`\`\`
 
-**4. 引用块样式**
+**3. 引用块样式**
 \`\`\`css
 border-left: 4px solid #007bff;
 padding: 15px 20px;
@@ -1178,7 +1214,7 @@ background: #f5f5f5;
 border-radius: 0 8px 8px 0;
 \`\`\`
 
-**5. 代码块样式**
+**4. 代码块样式**
 \`\`\`css
 background: #2d2d2d;
 color: #f8f8f2;

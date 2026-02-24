@@ -330,7 +330,7 @@ async function saveMarkdownFileTauri(
 ): Promise<string | null> {
   try {
     const { save } = await import('@tauri-apps/plugin-dialog')
-    const { writeFile } = await import('@tauri-apps/plugin-fs')
+    const { writeFile, exists, mkdir } = await import('@tauri-apps/plugin-fs')
 
     const filePath = await save({
       defaultPath: `${defaultName}.md`,
@@ -338,16 +338,36 @@ async function saveMarkdownFileTauri(
     })
 
     if (!filePath) {
+      console.log('Save dialog cancelled by user')
       return null
     }
 
-    const encoder = new TextEncoder()
-    await writeFile(filePath, encoder.encode(content))
+    console.log('Saving file to:', filePath)
+    
+    // Ensure the directory exists
+    const dirPath = filePath.split('/').slice(0, -1).join('/') || filePath.split('\\').slice(0, -1).join('\\')
+    if (dirPath) {
+      try {
+        const dirExists = await exists(dirPath)
+        if (!dirExists) {
+          await mkdir(dirPath, { recursive: true })
+        }
+      } catch (e) {
+        // Ignore directory creation errors, writeFile will handle it
+        console.log('Directory check/create skipped:', e)
+      }
+    }
 
+    const encoder = new TextEncoder()
+    const contentToSave = content || ''
+    await writeFile(filePath, encoder.encode(contentToSave))
+    
+    console.log('File saved successfully:', filePath)
     return filePath
   } catch (error) {
     console.error('Failed to save file:', error)
-    return null
+    // Re-throw to let caller handle the error
+    throw error
   }
 }
 
