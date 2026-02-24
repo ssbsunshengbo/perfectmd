@@ -125,7 +125,7 @@
 
 /* Code Block Styles */
 .code-block,
-.ProseMirror pre {
+.prose-editor pre {
   background: #1e1e1e;
   border-radius: 8px;
   padding: 16px 20px;
@@ -135,7 +135,7 @@
 }
 
 .code-block code,
-.ProseMirror pre code {
+.prose-editor pre code {
   font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
   font-size: 14px;
   line-height: 1.6;
@@ -158,7 +158,7 @@
 
 /* Inline Code */
 .inline-code,
-.ProseMirror code:not(pre code) {
+.prose-editor code:not(pre code) {
   background: rgba(110, 118, 129, 0.2);
   color: #f97583;
   padding: 2px 6px;
@@ -168,32 +168,32 @@
 }
 
 .dark .inline-code,
-.dark .ProseMirror code:not(pre code) {
+.dark .prose-editor code:not(pre code) {
   background: rgba(110, 118, 129, 0.25);
   color: #ff7b72;
 }
 
 /* Table Styles */
-.ProseMirror table {
+.prose-editor table {
   border-collapse: collapse;
   width: 100%;
   margin: 16px 0;
   font-size: 14px;
 }
 
-.ProseMirror table th,
-.ProseMirror table td {
+.prose-editor table th,
+.prose-editor table td {
   border: 1px solid var(--border);
   padding: 8px 12px;
   text-align: left;
 }
 
-.ProseMirror table th {
+.prose-editor table th {
   background: var(--muted);
   font-weight: 600;
 }
 
-.ProseMirror table tr:nth-child(even) td {
+.prose-editor table tr:nth-child(even) td {
   background: var(--muted);
 }
 
@@ -221,12 +221,12 @@
 
 /* Math / KaTeX Styles */
 .math-inline,
-.ProseMirror .math-inline {
+.prose-editor .math-inline {
   padding: 0 2px;
 }
 
 .math-display,
-.ProseMirror .math-display {
+.prose-editor .math-display {
   display: block;
   text-align: center;
   margin: 20px 0;
@@ -235,7 +235,7 @@
 }
 
 /* Blockquote enhancement */
-.ProseMirror blockquote {
+.prose-editor blockquote {
   border-left: 4px solid var(--primary);
   margin: 16px 0;
   padding: 12px 20px;
@@ -245,7 +245,7 @@
 }
 
 /* Horizontal Rule */
-.ProseMirror hr {
+.prose-editor hr {
   border: none;
   height: 2px;
   background: linear-gradient(90deg, transparent, var(--border), transparent);
@@ -253,17 +253,17 @@
 }
 
 /* Link styles */
-.ProseMirror a {
+.prose-editor a {
   color: #0969da;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.dark .ProseMirror a {
+.dark .prose-editor a {
   color: #58a6ff;
 }
 
-.ProseMirror a:hover {
+.prose-editor a:hover {
   text-decoration-thickness: 2px;
 }
 
@@ -273,23 +273,23 @@
 }
 
 /* Scrollbar for code blocks */
-.ProseMirror pre::-webkit-scrollbar,
+.prose-editor pre::-webkit-scrollbar,
 .code-block::-webkit-scrollbar {
   height: 8px;
 }
 
-.ProseMirror pre::-webkit-scrollbar-track,
+.prose-editor pre::-webkit-scrollbar-track,
 .code-block::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.ProseMirror pre::-webkit-scrollbar-thumb,
+.prose-editor pre::-webkit-scrollbar-thumb,
 .code-block::-webkit-scrollbar-thumb {
   background: #4a4a4a;
   border-radius: 4px;
 }
 
-.ProseMirror pre::-webkit-scrollbar-thumb:hover,
+.prose-editor pre::-webkit-scrollbar-thumb:hover,
 .code-block::-webkit-scrollbar-thumb:hover {
   background: #5a5a5a;
 }

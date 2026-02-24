@@ -23,21 +23,21 @@ export const cssTemplates: CssTemplate[] = [
       accentColor: '#0284c7'
     },
     css: `/* 蓝白渐变背景主题 */
-.ProseMirror {
+.prose-editor {
   background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%);
   min-height: 100%;
   padding: 40px;
   border-radius: 8px;
 }
 
-.ProseMirror {
+.prose-editor {
   color: #1e3a5f;
   font-family: 'Georgia', 'Noto Serif SC', serif;
   font-size: 16px;
   line-height: 1.8;
 }
 
-.ProseMirror h1 {
+.prose-editor h1 {
   color: #0c4a6e;
   font-size: 2em;
   font-weight: 700;
@@ -46,28 +46,28 @@ export const cssTemplates: CssTemplate[] = [
   margin-bottom: 20px;
 }
 
-.ProseMirror h2 {
+.prose-editor h2 {
   color: #075985;
   font-size: 1.5em;
   border-bottom: 1px solid #38bdf8;
   padding-bottom: 8px;
 }
 
-.ProseMirror h3 {
+.prose-editor h3 {
   color: #0369a1;
   font-size: 1.25em;
 }
 
-.ProseMirror p {
+.prose-editor p {
   margin: 1em 0;
 }
 
-.ProseMirror a {
+.prose-editor a {
   color: #0284c7;
   text-decoration: underline;
 }
 
-.ProseMirror blockquote {
+.prose-editor blockquote {
   border-left: 4px solid #0284c7;
   background: rgba(255, 255, 255, 0.5);
   padding: 15px 20px;
@@ -76,7 +76,7 @@ export const cssTemplates: CssTemplate[] = [
   color: #334155;
 }
 
-.ProseMirror code {
+.prose-editor code {
   background: rgba(14, 116, 144, 0.1);
   color: #0e7490;
   padding: 2px 6px;
@@ -84,7 +84,7 @@ export const cssTemplates: CssTemplate[] = [
   font-family: 'Fira Code', 'Consolas', monospace;
 }
 
-.ProseMirror pre {
+.prose-editor pre {
   background: #0f172a;
   color: #e2e8f0;
   padding: 20px;
@@ -92,21 +92,21 @@ export const cssTemplates: CssTemplate[] = [
   overflow-x: auto;
 }
 
-.ProseMirror pre code {
+.prose-editor pre code {
   background: transparent;
   color: inherit;
   padding: 0;
 }
 
-.ProseMirror ul, .ProseMirror ol {
+.prose-editor ul, .prose-editor ol {
   padding-left: 25px;
 }
 
-.ProseMirror li {
+.prose-editor li {
   margin: 8px 0;
 }
 
-.ProseMirror hr {
+.prose-editor hr {
   border: none;
   height: 2px;
   background: linear-gradient(90deg, transparent, #0284c7, transparent);
@@ -129,7 +129,7 @@ export const cssTemplates: CssTemplate[] = [
       accentColor: '#8b4513'
     },
     css: `/* 纸张风格主题 - 模拟真实纸张 */
-.ProseMirror {
+.prose-editor {
   background: #faf8f0;
   min-height: 100%;
   padding: 50px 60px;
@@ -141,7 +141,7 @@ export const cssTemplates: CssTemplate[] = [
 }
 
 /* 添加纸张线条效果 */
-.ProseMirror::before {
+.prose-editor::before {
   content: '';
   position: absolute;
   left: 50px;
@@ -151,14 +151,14 @@ export const cssTemplates: CssTemplate[] = [
   background: rgba(255, 100, 100, 0.3);
 }
 
-.ProseMirror {
+.prose-editor {
   color: #2d2d2d;
   font-family: 'Times New Roman', 'Noto Serif SC', serif;
   font-size: 16px;
   line-height: 2;
 }
 
-.ProseMirror h1 {
+.prose-editor h1 {
   color: #8b4513;
   font-size: 2em;
   font-weight: bold;
@@ -168,7 +168,7 @@ export const cssTemplates: CssTemplate[] = [
   border-bottom: 3px double #8b4513;
 }
 
-.ProseMirror h2 {
+.prose-editor h2 {
   color: #5d3a1a;
   font-size: 1.5em;
   margin-top: 30px;
@@ -176,22 +176,22 @@ export const cssTemplates: CssTemplate[] = [
   padding-bottom: 8px;
 }
 
-.ProseMirror h3 {
+.prose-editor h3 {
   color: #4a3520;
   font-size: 1.25em;
 }
 
-.ProseMirror p {
+.prose-editor p {
   text-indent: 2em;
   margin: 1em 0;
 }
 
-.ProseMirror a {
+.prose-editor a {
   color: #8b4513;
   text-decoration: underline;
 }
 
-.ProseMirror blockquote {
+.prose-editor blockquote {
   border-left: 4px solid #8b4513;
   background: #fffef5;
   padding: 15px 25px;
@@ -200,7 +200,7 @@ export const cssTemplates: CssTemplate[] = [
   color: #555;
 }
 
-.ProseMirror code {
+.prose-editor code {
   background: #f0ebe0;
   color: #8b4513;
   padding: 2px 6px;
@@ -208,7 +208,7 @@ export const cssTemplates: CssTemplate[] = [
   font-family: 'Courier New', monospace;
 }
 
-.ProseMirror pre {
+.prose-editor pre {
   background: #2d2d2d;
   color: #f8f8f2;
   padding: 20px 25px;
@@ -217,17 +217,17 @@ export const cssTemplates: CssTemplate[] = [
   overflow-x: auto;
 }
 
-.ProseMirror pre code {
+.prose-editor pre code {
   background: transparent;
   color: inherit;
 }
 
-.ProseMirror ul, .ProseMirror ol {
+.prose-editor ul, .prose-editor ol {
   padding-left: 30px;
   text-indent: 0;
 }
 
-.ProseMirror li {
+.prose-editor li {
   margin: 5px 0;
 }
 
@@ -247,21 +247,21 @@ export const cssTemplates: CssTemplate[] = [
       accentColor: '#e94560'
     },
     css: `/* 暗黑优雅主题 - 深色背景 */
-.ProseMirror {
+.prose-editor {
   background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
   min-height: 100%;
   padding: 40px;
   border-radius: 8px;
 }
 
-.ProseMirror {
+.prose-editor {
   color: #eaeaea;
   font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
   font-size: 16px;
   line-height: 1.8;
 }
 
-.ProseMirror h1 {
+.prose-editor h1 {
   color: #ffffff;
   font-size: 2.2em;
   font-weight: 600;
@@ -272,34 +272,34 @@ export const cssTemplates: CssTemplate[] = [
   margin-bottom: 25px;
 }
 
-.ProseMirror h2 {
+.prose-editor h2 {
   color: #e94560;
   font-size: 1.6em;
   padding-bottom: 8px;
   border-bottom: 1px solid #e94560;
 }
 
-.ProseMirror h3 {
+.prose-editor h3 {
   color: #f1f1f1;
   font-size: 1.3em;
 }
 
-.ProseMirror p {
+.prose-editor p {
   margin: 1em 0;
 }
 
-.ProseMirror a {
+.prose-editor a {
   color: #4fc3f7;
   text-decoration: none;
   border-bottom: 1px dashed #4fc3f7;
 }
 
-.ProseMirror a:hover {
+.prose-editor a:hover {
   color: #81d4fa;
   border-bottom-style: solid;
 }
 
-.ProseMirror blockquote {
+.prose-editor blockquote {
   border-left: 4px solid #e94560;
   background: rgba(233, 69, 96, 0.1);
   padding: 15px 20px;
@@ -308,7 +308,7 @@ export const cssTemplates: CssTemplate[] = [
   color: #b0b0b0;
 }
 
-.ProseMirror code {
+.prose-editor code {
   background: rgba(79, 195, 247, 0.15);
   color: #4fc3f7;
   padding: 3px 8px;
@@ -316,7 +316,7 @@ export const cssTemplates: CssTemplate[] = [
   font-family: 'Fira Code', monospace;
 }
 
-.ProseMirror pre {
+.prose-editor pre {
   background: #0d0d1a;
   border: 1px solid #333;
   padding: 20px;
@@ -324,21 +324,21 @@ export const cssTemplates: CssTemplate[] = [
   overflow-x: auto;
 }
 
-.ProseMirror pre code {
+.prose-editor pre code {
   background: transparent;
   color: #eaeaea;
   padding: 0;
 }
 
-.ProseMirror ul, .ProseMirror ol {
+.prose-editor ul, .prose-editor ol {
   padding-left: 25px;
 }
 
-.ProseMirror li::marker {
+.prose-editor li::marker {
   color: #e94560;
 }
 
-.ProseMirror hr {
+.prose-editor hr {
   border: none;
   height: 1px;
   background: linear-gradient(90deg, transparent, #e94560, transparent);
@@ -361,21 +361,21 @@ export const cssTemplates: CssTemplate[] = [
       accentColor: '#4caf50'
     },
     css: `/* 自然绿意主题 - 清新绿色调 */
-.ProseMirror {
+.prose-editor {
   background: linear-gradient(to bottom, #e8f5e9 0%, #c8e6c9 100%);
   min-height: 100%;
   padding: 40px;
   border-radius: 8px;
 }
 
-.ProseMirror {
+.prose-editor {
   color: #1b5e20;
   font-family: 'Palatino Linotype', 'Book Antiqua', 'Noto Serif SC', serif;
   font-size: 16px;
   line-height: 1.9;
 }
 
-.ProseMirror h1 {
+.prose-editor h1 {
   color: #1b5e20;
   font-size: 2em;
   text-align: center;
@@ -384,7 +384,7 @@ export const cssTemplates: CssTemplate[] = [
   padding-bottom: 15px;
 }
 
-.ProseMirror h1::after {
+.prose-editor h1::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -396,7 +396,7 @@ export const cssTemplates: CssTemplate[] = [
   border-radius: 2px;
 }
 
-.ProseMirror h2 {
+.prose-editor h2 {
   color: #2e7d32;
   font-size: 1.5em;
   margin-top: 30px;
@@ -404,24 +404,24 @@ export const cssTemplates: CssTemplate[] = [
   border-left: 4px solid #4caf50;
 }
 
-.ProseMirror h3 {
+.prose-editor h3 {
   color: #388e3c;
   font-size: 1.25em;
   padding-left: 10px;
   border-left: 3px solid #81c784;
 }
 
-.ProseMirror p {
+.prose-editor p {
   margin: 1em 0;
 }
 
-.ProseMirror a {
+.prose-editor a {
   color: #2e7d32;
   text-decoration: underline;
   text-decoration-color: #81c784;
 }
 
-.ProseMirror blockquote {
+.prose-editor blockquote {
   border-left: 4px solid #4caf50;
   background: rgba(255, 255, 255, 0.6);
   padding: 15px 20px;
@@ -430,7 +430,7 @@ export const cssTemplates: CssTemplate[] = [
   color: #2e7d32;
 }
 
-.ProseMirror code {
+.prose-editor code {
   background: rgba(76, 175, 80, 0.15);
   color: #2e7d32;
   padding: 2px 6px;
@@ -438,7 +438,7 @@ export const cssTemplates: CssTemplate[] = [
   font-family: 'Consolas', monospace;
 }
 
-.ProseMirror pre {
+.prose-editor pre {
   background: #1b5e20;
   color: #e8f5e9;
   padding: 20px;
@@ -446,16 +446,16 @@ export const cssTemplates: CssTemplate[] = [
   overflow-x: auto;
 }
 
-.ProseMirror pre code {
+.prose-editor pre code {
   background: transparent;
   color: inherit;
 }
 
-.ProseMirror ul, .ProseMirror ol {
+.prose-editor ul, .prose-editor ol {
   padding-left: 25px;
 }
 
-.ProseMirror li::marker {
+.prose-editor li::marker {
   color: #4caf50;
 }
 
@@ -475,21 +475,21 @@ export const cssTemplates: CssTemplate[] = [
       accentColor: '#ff9800'
     },
     css: `/* 暖阳黄昏主题 - 温暖橙黄色调 */
-.ProseMirror {
+.prose-editor {
   background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 50%, #ffe0b2 100%);
   min-height: 100%;
   padding: 40px;
   border-radius: 8px;
 }
 
-.ProseMirror {
+.prose-editor {
   color: #5d4037;
   font-family: 'Georgia', 'Noto Serif SC', serif;
   font-size: 16px;
   line-height: 1.8;
 }
 
-.ProseMirror h1 {
+.prose-editor h1 {
   color: #e65100;
   font-size: 2em;
   font-weight: bold;
@@ -498,33 +498,33 @@ export const cssTemplates: CssTemplate[] = [
   text-shadow: 1px 1px 2px rgba(230, 81, 0, 0.2);
 }
 
-.ProseMirror h2 {
+.prose-editor h2 {
   color: #ef6c00;
   font-size: 1.5em;
   border-bottom: 2px solid #ffcc80;
   padding-bottom: 8px;
 }
 
-.ProseMirror h3 {
+.prose-editor h3 {
   color: #f57c00;
   font-size: 1.25em;
 }
 
-.ProseMirror p {
+.prose-editor p {
   margin: 1em 0;
 }
 
-.ProseMirror a {
+.prose-editor a {
   color: #e65100;
   text-decoration: underline;
   text-decoration-color: #ffb74d;
 }
 
-.ProseMirror a:hover {
+.prose-editor a:hover {
   color: #bf360c;
 }
 
-.ProseMirror blockquote {
+.prose-editor blockquote {
   border-left: 4px solid #ff9800;
   background: rgba(255, 255, 255, 0.5);
   padding: 15px 20px;
@@ -534,7 +534,7 @@ export const cssTemplates: CssTemplate[] = [
   font-style: italic;
 }
 
-.ProseMirror code {
+.prose-editor code {
   background: rgba(255, 152, 0, 0.2);
   color: #e65100;
   padding: 2px 6px;
@@ -542,7 +542,7 @@ export const cssTemplates: CssTemplate[] = [
   font-family: 'Consolas', monospace;
 }
 
-.ProseMirror pre {
+.prose-editor pre {
   background: #3e2723;
   color: #fff8e1;
   padding: 20px;
@@ -550,20 +550,20 @@ export const cssTemplates: CssTemplate[] = [
   overflow-x: auto;
 }
 
-.ProseMirror pre code {
+.prose-editor pre code {
   background: transparent;
   color: inherit;
 }
 
-.ProseMirror ul, .ProseMirror ol {
+.prose-editor ul, .prose-editor ol {
   padding-left: 25px;
 }
 
-.ProseMirror li::marker {
+.prose-editor li::marker {
   color: #ff9800;
 }
 
-.ProseMirror hr {
+.prose-editor hr {
   border: none;
   height: 2px;
   background: linear-gradient(90deg, transparent, #ff9800, transparent);
@@ -586,13 +586,13 @@ export const cssTemplates: CssTemplate[] = [
       accentColor: '#666666'
     },
     css: `/* 极简纯净主题 - 简约设计 */
-.ProseMirror {
+.prose-editor {
   background: #ffffff;
   min-height: 100%;
   padding: 50px 60px;
 }
 
-.ProseMirror {
+.prose-editor {
   color: #333333;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
   font-size: 16px;
@@ -600,7 +600,7 @@ export const cssTemplates: CssTemplate[] = [
   font-weight: 400;
 }
 
-.ProseMirror h1 {
+.prose-editor h1 {
   color: #111111;
   font-size: 2.2em;
   font-weight: 600;
@@ -608,7 +608,7 @@ export const cssTemplates: CssTemplate[] = [
   letter-spacing: -0.02em;
 }
 
-.ProseMirror h2 {
+.prose-editor h2 {
   color: #222222;
   font-size: 1.6em;
   font-weight: 600;
@@ -617,36 +617,36 @@ export const cssTemplates: CssTemplate[] = [
   border-bottom: 1px solid #e0e0e0;
 }
 
-.ProseMirror h3 {
+.prose-editor h3 {
   color: #333333;
   font-size: 1.3em;
   font-weight: 600;
   margin-top: 25px;
 }
 
-.ProseMirror p {
+.prose-editor p {
   margin: 1.2em 0;
 }
 
-.ProseMirror a {
+.prose-editor a {
   color: #333333;
   text-decoration: underline;
   text-decoration-color: #999;
   text-underline-offset: 3px;
 }
 
-.ProseMirror a:hover {
+.prose-editor a:hover {
   text-decoration-color: #333;
 }
 
-.ProseMirror blockquote {
+.prose-editor blockquote {
   border-left: 3px solid #ddd;
   padding: 10px 0 10px 20px;
   margin: 20px 0;
   color: #666;
 }
 
-.ProseMirror code {
+.prose-editor code {
   background: #f5f5f5;
   color: #333;
   padding: 2px 6px;
@@ -655,7 +655,7 @@ export const cssTemplates: CssTemplate[] = [
   font-size: 0.9em;
 }
 
-.ProseMirror pre {
+.prose-editor pre {
   background: #fafafa;
   border: 1px solid #eee;
   padding: 20px;
@@ -663,20 +663,20 @@ export const cssTemplates: CssTemplate[] = [
   overflow-x: auto;
 }
 
-.ProseMirror pre code {
+.prose-editor pre code {
   background: transparent;
   padding: 0;
 }
 
-.ProseMirror ul, .ProseMirror ol {
+.prose-editor ul, .prose-editor ol {
   padding-left: 25px;
 }
 
-.ProseMirror li {
+.prose-editor li {
   margin: 6px 0;
 }
 
-.ProseMirror hr {
+.prose-editor hr {
   border: none;
   height: 1px;
   background: #e0e0e0;
@@ -699,28 +699,28 @@ export const cssTemplates: CssTemplate[] = [
       accentColor: '#64ffda'
     },
     css: `/* 深海幽蓝主题 - 深蓝色调 */
-.ProseMirror {
+.prose-editor {
   background: linear-gradient(180deg, #0a192f 0%, #112240 100%);
   min-height: 100%;
   padding: 40px;
   border-radius: 8px;
 }
 
-.ProseMirror {
+.prose-editor {
   color: #8892b0;
   font-family: 'SF Pro Display', -apple-system, 'Segoe UI', sans-serif;
   font-size: 16px;
   line-height: 1.8;
 }
 
-.ProseMirror h1 {
+.prose-editor h1 {
   color: #ccd6f6;
   font-size: 2.2em;
   font-weight: 700;
   margin-bottom: 30px;
 }
 
-.ProseMirror h2 {
+.prose-editor h2 {
   color: #a8b2d1;
   font-size: 1.6em;
   font-weight: 600;
@@ -729,23 +729,23 @@ export const cssTemplates: CssTemplate[] = [
   border-bottom: 1px solid #233554;
 }
 
-.ProseMirror h3 {
+.prose-editor h3 {
   color: #ccd6f6;
   font-size: 1.3em;
   font-weight: 600;
 }
 
-.ProseMirror p {
+.prose-editor p {
   margin: 1em 0;
 }
 
-.ProseMirror a {
+.prose-editor a {
   color: #64ffda;
   text-decoration: none;
   position: relative;
 }
 
-.ProseMirror a::after {
+.prose-editor a::after {
   content: '';
   position: absolute;
   bottom: -2px;
@@ -756,11 +756,11 @@ export const cssTemplates: CssTemplate[] = [
   transition: width 0.3s;
 }
 
-.ProseMirror a:hover::after {
+.prose-editor a:hover::after {
   width: 100%;
 }
 
-.ProseMirror blockquote {
+.prose-editor blockquote {
   border-left: 3px solid #64ffda;
   background: rgba(100, 255, 218, 0.05);
   padding: 15px 20px;
@@ -769,7 +769,7 @@ export const cssTemplates: CssTemplate[] = [
   color: #a8b2d1;
 }
 
-.ProseMirror code {
+.prose-editor code {
   background: rgba(100, 255, 218, 0.1);
   color: #64ffda;
   padding: 3px 8px;
@@ -777,7 +777,7 @@ export const cssTemplates: CssTemplate[] = [
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
-.ProseMirror pre {
+.prose-editor pre {
   background: #112240;
   border: 1px solid #233554;
   padding: 20px;
@@ -785,21 +785,21 @@ export const cssTemplates: CssTemplate[] = [
   overflow-x: auto;
 }
 
-.ProseMirror pre code {
+.prose-editor pre code {
   background: transparent;
   color: #8892b0;
   padding: 0;
 }
 
-.ProseMirror ul, .ProseMirror ol {
+.prose-editor ul, .prose-editor ol {
   padding-left: 25px;
 }
 
-.ProseMirror li::marker {
+.prose-editor li::marker {
   color: #64ffda;
 }
 
-.ProseMirror hr {
+.prose-editor hr {
   border: none;
   height: 1px;
   background: #233554;
@@ -822,21 +822,21 @@ export const cssTemplates: CssTemplate[] = [
       accentColor: '#a855f7'
     },
     css: `/* 梦幻紫罗兰主题 - 浪漫紫色 */
-.ProseMirror {
+.prose-editor {
   background: linear-gradient(135deg, #1e1133 0%, #2d1b4e 50%, #3d1f6d 100%);
   min-height: 100%;
   padding: 40px;
   border-radius: 8px;
 }
 
-.ProseMirror {
+.prose-editor {
   color: #e1d5f0;
   font-family: 'Crimson Text', 'Noto Serif SC', serif;
   font-size: 16px;
   line-height: 1.8;
 }
 
-.ProseMirror h1 {
+.prose-editor h1 {
   color: #f3e8ff;
   font-size: 2.2em;
   font-weight: 700;
@@ -848,7 +848,7 @@ export const cssTemplates: CssTemplate[] = [
   background-clip: text;
 }
 
-.ProseMirror h2 {
+.prose-editor h2 {
   color: #e9d5ff;
   font-size: 1.6em;
   font-weight: 600;
@@ -857,28 +857,28 @@ export const cssTemplates: CssTemplate[] = [
   border-bottom: 1px solid #7c3aed;
 }
 
-.ProseMirror h3 {
+.prose-editor h3 {
   color: #f3e8ff;
   font-size: 1.3em;
   font-weight: 600;
 }
 
-.ProseMirror p {
+.prose-editor p {
   margin: 1em 0;
 }
 
-.ProseMirror a {
+.prose-editor a {
   color: #c084fc;
   text-decoration: none;
   border-bottom: 1px solid transparent;
   transition: border-color 0.3s;
 }
 
-.ProseMirror a:hover {
+.prose-editor a:hover {
   border-bottom-color: #c084fc;
 }
 
-.ProseMirror blockquote {
+.prose-editor blockquote {
   border-left: 3px solid #a855f7;
   background: rgba(168, 85, 247, 0.1);
   padding: 15px 20px;
@@ -887,7 +887,7 @@ export const cssTemplates: CssTemplate[] = [
   color: #d8b4fe;
 }
 
-.ProseMirror code {
+.prose-editor code {
   background: rgba(192, 132, 252, 0.2);
   color: #e9d5ff;
   padding: 3px 8px;
@@ -895,7 +895,7 @@ export const cssTemplates: CssTemplate[] = [
   font-family: 'Fira Code', monospace;
 }
 
-.ProseMirror pre {
+.prose-editor pre {
   background: #1e1133;
   border: 1px solid #581c87;
   padding: 20px;
@@ -903,21 +903,21 @@ export const cssTemplates: CssTemplate[] = [
   overflow-x: auto;
 }
 
-.ProseMirror pre code {
+.prose-editor pre code {
   background: transparent;
   color: #e1d5f0;
   padding: 0;
 }
 
-.ProseMirror ul, .ProseMirror ol {
+.prose-editor ul, .prose-editor ol {
   padding-left: 25px;
 }
 
-.ProseMirror li::marker {
+.prose-editor li::marker {
   color: #c084fc;
 }
 
-.ProseMirror hr {
+.prose-editor hr {
   border: none;
   height: 1px;
   background: linear-gradient(90deg, transparent, #a855f7, transparent);
@@ -941,7 +941,7 @@ export const cssTemplates: CssTemplate[] = [
     },
     css: `/* 自定义背景图主题 - 将下面的URL替换为你的图片地址 */
 /* 支持：本地文件路径、网络图片URL */
-.ProseMirror {
+.prose-editor {
   /* 方法1：使用网络图片URL */
   /* background: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url('https://example.com/your-image.jpg'); */
   
@@ -960,7 +960,7 @@ export const cssTemplates: CssTemplate[] = [
   border-radius: 8px;
 }
 
-.ProseMirror {
+.prose-editor {
   color: #ffffff;
   font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
   font-size: 16px;
@@ -968,7 +968,7 @@ export const cssTemplates: CssTemplate[] = [
   text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
-.ProseMirror h1 {
+.prose-editor h1 {
   color: #ffffff;
   font-size: 2.2em;
   font-weight: 700;
@@ -976,7 +976,7 @@ export const cssTemplates: CssTemplate[] = [
   text-shadow: 0 2px 4px rgba(0,0,0,0.4);
 }
 
-.ProseMirror h2 {
+.prose-editor h2 {
   color: #e0e0e0;
   font-size: 1.6em;
   font-weight: 600;
@@ -985,23 +985,23 @@ export const cssTemplates: CssTemplate[] = [
   border-bottom: 1px solid rgba(255,255,255,0.3);
 }
 
-.ProseMirror h3 {
+.prose-editor h3 {
   color: #f0f0f0;
   font-size: 1.3em;
   font-weight: 600;
 }
 
-.ProseMirror p {
+.prose-editor p {
   margin: 1em 0;
 }
 
-.ProseMirror a {
+.prose-editor a {
   color: #4fc3f7;
   text-decoration: underline;
   text-decoration-color: rgba(79, 195, 247, 0.5);
 }
 
-.ProseMirror blockquote {
+.prose-editor blockquote {
   border-left: 3px solid rgba(255,255,255,0.5);
   background: rgba(255,255,255,0.1);
   backdrop-filter: blur(5px);
@@ -1011,7 +1011,7 @@ export const cssTemplates: CssTemplate[] = [
   color: #e0e0e0;
 }
 
-.ProseMirror code {
+.prose-editor code {
   background: rgba(255,255,255,0.15);
   color: #fff;
   padding: 2px 6px;
@@ -1019,7 +1019,7 @@ export const cssTemplates: CssTemplate[] = [
   font-family: 'Consolas', monospace;
 }
 
-.ProseMirror pre {
+.prose-editor pre {
   background: rgba(0,0,0,0.5);
   backdrop-filter: blur(5px);
   padding: 20px;
@@ -1027,16 +1027,16 @@ export const cssTemplates: CssTemplate[] = [
   overflow-x: auto;
 }
 
-.ProseMirror pre code {
+.prose-editor pre code {
   background: transparent;
   color: #e0e0e0;
 }
 
-.ProseMirror ul, .ProseMirror ol {
+.prose-editor ul, .prose-editor ol {
   padding-left: 25px;
 }
 
-.ProseMirror li::marker {
+.prose-editor li::marker {
   color: #4fc3f7;
 }
 
@@ -1066,45 +1066,45 @@ export const cssDocumentation = `
 
 \`\`\`css
 /* 编辑器主容器 */
-.ProseMirror {
+.prose-editor {
   /* 这里定义编辑器的整体样式 */
 }
 
 /* 所有标题 */
-.ProseMirror h1, .ProseMirror h2, .ProseMirror h3 { }
+.prose-editor h1, .prose-editor h2, .prose-editor h3 { }
 
 /* 一级标题 */
-.ProseMirror h1 { }
+.prose-editor h1 { }
 
 /* 二级标题 */
-.ProseMirror h2 { }
+.prose-editor h2 { }
 
 /* 三级标题 */
-.ProseMirror h3 { }
+.prose-editor h3 { }
 
 /* 段落 */
-.ProseMirror p { }
+.prose-editor p { }
 
 /* 链接 */
-.ProseMirror a { }
+.prose-editor a { }
 
 /* 引用块 */
-.ProseMirror blockquote { }
+.prose-editor blockquote { }
 
 /* 行内代码 */
-.ProseMirror code { }
+.prose-editor code { }
 
 /* 代码块 */
-.ProseMirror pre { }
-.ProseMirror pre code { }
+.prose-editor pre { }
+.prose-editor pre code { }
 
 /* 列表 */
-.ProseMirror ul { }  /* 无序列表 */
-.ProseMirror ol { }  /* 有序列表 */
-.ProseMirror li { }  /* 列表项 */
+.prose-editor ul { }  /* 无序列表 */
+.prose-editor ol { }  /* 有序列表 */
+.prose-editor li { }  /* 列表项 */
 
 /* 分割线 */
-.ProseMirror hr { }
+.prose-editor hr { }
 
 /* 文本选中样式 */
 ::selection { }

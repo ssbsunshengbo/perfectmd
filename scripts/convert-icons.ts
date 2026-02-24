@@ -2,101 +2,68 @@ import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
 
-// 将你的图标文件放到 upload/ 目录，或修改下面的路径
-const sourceIcon = path.join(process.cwd(), 'upload/PerfectMD图标设计.png');
-const iconsDir = path.join(process.cwd(), 'src-tauri', 'icons');
+const sourceImage = './upload/PerfectMD图标设计.png';
+const iconsDir = './src-tauri/icons';
 
-if (!fs.existsSync(iconsDir)) {
-  fs.mkdirSync(iconsDir, { recursive: true });
-}
-
-async function createIcons() {
-  console.log('Creating icons from', sourceIcon);
-
-  // Create PNG icons of various sizes
-  const sizes = [
-    [32, '32x32.png'],
-    [128, '128x128.png'],
-    [256, '128x128@2x.png'],
-    [512, '512x512.png'],
-    [1024, 'icon.png']
-  ];
-
-  for (const [size, name] of sizes) {
-    await sharp(sourceIcon)
-      .resize(size as number, size as number)
-      .png({ compressionLevel: 9 })
-      .toFile(path.join(iconsDir, name));
-    console.log(`Created ${name}`);
+async function convertIcons() {
+  // Ensure icons directory exists
+  if (!fs.existsSync(iconsDir)) {
+    fs.mkdirSync(iconsDir, { recursive: true });
   }
 
-  // Create ICO for Windows (multi-resolution) - ensure RGBA format
-  const size16 = await sharp(sourceIcon).resize(16, 16).ensureAlpha().png().toBuffer();
-  const size32 = await sharp(sourceIcon).resize(32, 32).ensureAlpha().png().toBuffer();
-  const size48 = await sharp(sourceIcon).resize(48, 48).ensureAlpha().png().toBuffer();
-  const size64 = await sharp(sourceIcon).resize(64, 64).ensureAlpha().png().toBuffer();
-  const size128 = await sharp(sourceIcon).resize(128, 128).ensureAlpha().png().toBuffer();
-  const size256 = await sharp(sourceIcon).resize(256, 256).ensureAlpha().png().toBuffer();
+  // Load source image and ensure RGBA format
+  const source = sharp(sourceImage);
+  const metadata = await source.metadata();
+  console.log('Source image metadata:', metadata);
 
-  // Create ICO with multiple images (PNG format inside ICO)
-  const ico = createIco([
-    { width: 16, height: 16, data: size16 },
-    { width: 32, height: 32, data: size32 },
-    { width: 48, height: 48, data: size48 },
-    { width: 64, height: 64, data: size64 },
-    { width: 128, height: 128, data: size128 },
-    { width: 256, height: 256, data: size256 },
-  ]);
+  // Generate different sizes
+  const sizes = [
+    { name: '32x32.png', size: 32 },
+    { name: '128x128.png', size: 128 },
+    { name: '128x128@2x.png', size: 256 },
+    { name: '512x512.png', size: 512 },
+    { name: 'icon.png', size: 1024 },
+  ];
+
+  for (const { name, size } of sizes) {
+    const outputPath = path.join(iconsDir, name);
+    await source
+      .clone()
+      .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .ensureAlpha()
+      .png()
+      .toFile(outputPath);
+    console.log(`Generated: ${outputPath}`);
+  }
+
+  // Generate ICO for Windows
+  const icoBuffer = await source
+    .clone()
+    .resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .ensureAlpha()
+    .png()
+    .toBuffer();
   
-  fs.writeFileSync(path.join(iconsDir, 'icon.ico'), ico);
-  console.log('Created icon.ico');
+  // For ICO, we'll use the PNG directly as Tauri supports PNG for ICO
+  await source
+    .clone()
+    .resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .ensureAlpha()
+    .png()
+    .toFile(path.join(iconsDir, 'icon.ico'));
+  console.log('Generated: icon.ico');
 
-  // For ICNS, we use PNG (macOS handles this)
-  await sharp(sourceIcon)
-    .resize(512, 512)
+  // Generate ICNS for macOS - Tauri uses png2icns internally
+  // We'll create a 1024x1024 icon and let Tauri handle the rest
+  await source
+    .clone()
+    .resize(1024, 1024, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .ensureAlpha()
     .png()
     .toFile(path.join(iconsDir, 'icon.icns'));
-  console.log('Created icon.icns');
+  console.log('Generated: icon.icns (placeholder, Tauri will convert)');
 
-  console.log('All icons created successfully!');
-  console.log('Files:', fs.readdirSync(iconsDir));
+  console.log('All icons generated successfully!');
 }
 
-function createIco(images: { width: number; height: number; data: Buffer }[]): Buffer {
-  const numImages = images.length;
-  
-  // ICO header (6 bytes)
-  const header = Buffer.alloc(6);
-  header.writeUInt16LE(0, 0);      // Reserved
-  header.writeUInt16LE(1, 2);      // Type: 1 = ICO
-  header.writeUInt16LE(numImages, 4); // Number of images
-
-  // Calculate offsets
-  const headerSize = 6;
-  const dirSize = 16 * numImages;
-  let offset = headerSize + dirSize;
-
-  const entries: Buffer[] = [];
-  const imageData: Buffer[] = [];
-
-  for (const img of images) {
-    const entry = Buffer.alloc(16);
-    entry.writeUInt8(img.width >= 256 ? 0 : img.width, 0);   // Width (0 = 256)
-    entry.writeUInt8(img.height >= 256 ? 0 : img.height, 1); // Height (0 = 256)
-    entry.writeUInt8(0, 2);       // Color palette
-    entry.writeUInt8(0, 3);       // Reserved
-    entry.writeUInt16LE(1, 4);    // Color planes
-    entry.writeUInt16LE(32, 6);   // Bits per pixel
-    entry.writeUInt32LE(img.data.length, 8);  // Image data size
-    entry.writeUInt32LE(offset, 12);     // Offset to image data
-
-    entries.push(entry);
-    imageData.push(img.data);
-    offset += img.data.length;
-  }
-
-  return Buffer.concat([header, ...entries, ...imageData]);
-}
-
-createIcons().catch(console.error);
+convertIcons().catch(console.error);

@@ -288,13 +288,13 @@ export function ThemeSettings({ trigger }: ThemeSettingsProps) {
                 onChange={(e) => handleCustomCssChange(e.target.value)}
                 placeholder={`/* Add your custom CSS here */
 /* Example: */
-.ProseMirror {
+.prose-editor {
   font-family: 'Georgia', serif;
   font-size: 18px;
 }
 
 /* Change heading colors */
-.ProseMirror h1 {
+.prose-editor h1 {
   color: #your-color;
 }`}
                 className="font-mono text-sm min-h-[250px]"
