@@ -273,20 +273,46 @@ async function exportToPdfWeb(title: string, content: string): Promise<boolean> 
 
 async function exportToPdfTauri(title: string, content: string): Promise<boolean> {
   try {
-    const { save } = await import('@tauri-apps/plugin-dialog')
-    const { writeTextFile } = await import('@tauri-apps/plugin-fs')
-
-    const filePath = await save({
-      defaultPath: `${title}.html`,
-      filters: [{ name: 'HTML', extensions: ['html'] }],
-    })
-
-    if (!filePath) {
-      return false
-    }
-
+    // Create a new window with the content for printing
+    // The user can use "Print to PDF" from the print dialog
     const html = generatePrintableHtml(title, content)
-    await writeTextFile(filePath, html)
+    
+    // Create a Blob URL for the HTML content
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    
+    // Open in a new window
+    const printWindow = window.open(url, '_blank')
+    
+    if (!printWindow) {
+      // Fallback: save as HTML if popup blocked
+      const { save } = await import('@tauri-apps/plugin-dialog')
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs')
+      
+      const filePath = await save({
+        defaultPath: `${title}.html`,
+        filters: [
+          { name: 'PDF (Print to file)', extensions: ['pdf'] },
+          { name: 'HTML', extensions: ['html'] }
+        ],
+      })
+
+      if (!filePath) {
+        return false
+      }
+
+      await writeTextFile(filePath, html)
+      return true
+    }
+    
+    // Wait for content to load then print
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print()
+        // Clean up the blob URL after printing
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }, 500)
+    }
 
     return true
   } catch (error) {
