@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { FloatingToolbar } from './FloatingToolbar'
+import hljs from 'highlight.js'
+import katex from 'katex'
 
 interface MarkdownEditorProps {
   content: string
@@ -325,6 +327,31 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         return true
       }
 
+      // Task list: - [] or - [ ]
+      if (currentLine === '-[]' || currentLine === '-[]' || currentLine === '-[ ]') {
+        e.preventDefault()
+        if (!deleteMarkdownTrigger(selection, currentLine)) return false
+        ensureIsolatedBlock()
+        // Create task list item with checkbox
+        const li = document.createElement('li')
+        li.className = 'task-list-item'
+        const checkbox = document.createElement('input')
+        checkbox.type = 'checkbox'
+        checkbox.className = 'task-checkbox'
+        li.appendChild(checkbox)
+        li.appendChild(document.createTextNode('\u200B')) // Zero-width space for cursor
+        const range = selection.getRangeAt(0)
+        range.insertNode(li)
+        // Move cursor after checkbox
+        const newRange = document.createRange()
+        newRange.setStartAfter(checkbox)
+        newRange.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(newRange)
+        handleInput()
+        return true
+      }
+
       if (currentLine === '1.') {
         e.preventDefault()
         if (!deleteMarkdownTrigger(selection, currentLine)) return false
@@ -335,6 +362,35 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       }
     }
 
+    // Code block: ``` + Enter
+    if (e.key === 'Enter' && currentLine.startsWith('```')) {
+      e.preventDefault()
+      const language = currentLine.slice(3).trim() || 'plaintext'
+      if (!deleteMarkdownTrigger(selection, currentLine)) return false
+      
+      // Create code block
+      const pre = document.createElement('pre')
+      pre.className = `code-block language-${language}`
+      pre.setAttribute('data-language', language)
+      const code = document.createElement('code')
+      code.className = `language-${language}`
+      code.textContent = '\n' // Start with empty line
+      pre.appendChild(code)
+      
+      const range = selection.getRangeAt(0)
+      range.insertNode(pre)
+      
+      // Move cursor inside code block
+      const newRange = document.createRange()
+      newRange.setStart(code, 0)
+      newRange.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(newRange)
+      
+      handleInput()
+      return true
+    }
+
     if (e.key === 'Enter' && (currentLine === '---' || currentLine === '***')) {
       e.preventDefault()
       if (!deleteMarkdownTrigger(selection, currentLine)) return false
@@ -342,6 +398,43 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       document.execCommand('insertParagraph', false)
       handleInput()
       return true
+    }
+
+    // Table shortcut: | + Space (start of table)
+    if (e.key === ' ' && currentLine.endsWith('|') && currentLine.indexOf('|') === 0) {
+      // Check if it looks like a table row
+      const pipes = (currentLine.match(/\|/g) || []).length
+      if (pipes >= 2) {
+        e.preventDefault()
+        if (!deleteMarkdownTrigger(selection, currentLine)) return false
+        
+        // Create table
+        const cols = pipes - 1
+        const table = document.createElement('table')
+        const tr = document.createElement('tr')
+        for (let i = 0; i < cols; i++) {
+          const td = document.createElement('td')
+          td.textContent = ' '
+          tr.appendChild(td)
+        }
+        table.appendChild(tr)
+        
+        const range = selection.getRangeAt(0)
+        range.insertNode(table)
+        
+        // Move cursor to first cell
+        const firstCell = table.querySelector('td')
+        if (firstCell) {
+          const newRange = document.createRange()
+          newRange.selectNodeContents(firstCell)
+          newRange.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(newRange)
+        }
+        
+        handleInput()
+        return true
+      }
     }
 
     return false
@@ -482,6 +575,20 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           el.href = m[2]
           el.target = '_blank'
           el.rel = 'noopener noreferrer'
+          return el
+        },
+      },
+      {
+        // $...$ inline math
+        regex: /\$([^$\n]+)\$$/,
+        build: (m) => {
+          const el = document.createElement('span')
+          el.className = 'math-inline'
+          try {
+            el.innerHTML = katex.renderToString(m[1], { throwOnError: false })
+          } catch {
+            el.textContent = `$${m[1]}$`
+          }
           return el
         },
       },
@@ -1324,6 +1431,112 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         .prose-editor strike,
         .prose-editor del {
           text-decoration: line-through;
+        }
+        
+        /* Code block with syntax highlighting */
+        .prose-editor .code-block {
+          background-color: #1e1e1e;
+          border-radius: 8px;
+          padding: 16px;
+          margin: 1em 0;
+          overflow-x: auto;
+          position: relative;
+        }
+        
+        .prose-editor .code-block::before {
+          content: attr(data-language);
+          position: absolute;
+          top: 8px;
+          right: 12px;
+          font-size: 12px;
+          color: #6b7280;
+          text-transform: uppercase;
+          font-family: ui-sans-serif, system-ui, sans-serif;
+        }
+        
+        .prose-editor .code-block code {
+          background: transparent;
+          color: #d4d4d4;
+          padding: 0;
+          font-size: 14px;
+          line-height: 1.6;
+        }
+        
+        /* Task list styles */
+        .prose-editor .task-list-item {
+          list-style: none;
+          margin-left: -1.5em;
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+        }
+        
+        .prose-editor .task-checkbox {
+          width: 16px;
+          height: 16px;
+          margin-top: 4px;
+          cursor: pointer;
+          accent-color: #22c55e;
+        }
+        
+        .prose-editor .task-list-item.completed {
+          text-decoration: line-through;
+          color: var(--muted-foreground);
+        }
+        
+        /* Math formula styles */
+        .prose-editor .math-inline {
+          background-color: rgba(147, 51, 234, 0.1);
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-family: 'Times New Roman', serif;
+        }
+        
+        .prose-editor .math-block {
+          display: block;
+          text-align: center;
+          margin: 1em 0;
+          padding: 1em;
+          background-color: rgba(147, 51, 234, 0.05);
+          border-radius: 8px;
+          overflow-x: auto;
+        }
+        
+        /* Highlight.js overrides for dark theme */
+        .dark .prose-editor .code-block {
+          background-color: #0d1117;
+        }
+        
+        .dark .prose-editor .code-block code {
+          color: #c9d1d9;
+        }
+        
+        /* Improved table styles */
+        .prose-editor table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: 1em 0;
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .prose-editor th {
+          background-color: #f3f4f6;
+          font-weight: 600;
+          text-align: left;
+        }
+        
+        .dark .prose-editor th {
+          background-color: #374151;
+        }
+        
+        .prose-editor td {
+          background-color: white;
+        }
+        
+        .dark .prose-editor td {
+          background-color: #1f2937;
         }
       `}</style>
     </div>
