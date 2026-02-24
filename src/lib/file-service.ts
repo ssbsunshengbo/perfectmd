@@ -274,7 +274,7 @@ async function exportToPdfWeb(title: string, content: string): Promise<boolean> 
 async function exportToPdfTauri(title: string, content: string): Promise<boolean> {
   try {
     const { save } = await import('@tauri-apps/plugin-dialog')
-    const { writeFile } = await import('@tauri-apps/plugin-fs')
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs')
 
     const filePath = await save({
       defaultPath: `${title}.html`,
@@ -286,8 +286,7 @@ async function exportToPdfTauri(title: string, content: string): Promise<boolean
     }
 
     const html = generatePrintableHtml(title, content)
-    const encoder = new TextEncoder()
-    await writeFile(filePath, encoder.encode(html))
+    await writeTextFile(filePath, html)
 
     return true
   } catch (error) {
@@ -330,8 +329,9 @@ async function saveMarkdownFileTauri(
 ): Promise<string | null> {
   try {
     const { save } = await import('@tauri-apps/plugin-dialog')
-    const { writeFile, exists, mkdir } = await import('@tauri-apps/plugin-fs')
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs')
 
+    console.log('Opening save dialog...')
     const filePath = await save({
       defaultPath: `${defaultName}.md`,
       filters: [{ name: 'Markdown', extensions: ['md'] }],
@@ -342,32 +342,22 @@ async function saveMarkdownFileTauri(
       return null
     }
 
-    console.log('Saving file to:', filePath)
-    
-    // Ensure the directory exists
-    const dirPath = filePath.split('/').slice(0, -1).join('/') || filePath.split('\\').slice(0, -1).join('\\')
-    if (dirPath) {
-      try {
-        const dirExists = await exists(dirPath)
-        if (!dirExists) {
-          await mkdir(dirPath, { recursive: true })
-        }
-      } catch (e) {
-        // Ignore directory creation errors, writeFile will handle it
-        console.log('Directory check/create skipped:', e)
-      }
-    }
+    console.log('User selected path:', filePath)
 
-    const encoder = new TextEncoder()
-    const contentToSave = content || ''
-    await writeFile(filePath, encoder.encode(contentToSave))
+    // Use writeTextFile for simpler string content handling
+    await writeTextFile(filePath, content || '')
     
     console.log('File saved successfully:', filePath)
     return filePath
   } catch (error) {
     console.error('Failed to save file:', error)
-    // Re-throw to let caller handle the error
-    throw error
+    // Handle Tauri errors which may not be standard Error objects
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : typeof error === 'string' 
+        ? error 
+        : JSON.stringify(error)
+    throw new Error(`Save failed: ${errorMessage}`)
   }
 }
 
@@ -453,11 +443,8 @@ export async function saveFileToPath(
   }
 
   try {
-    const { writeFile } = await import('@tauri-apps/plugin-fs')
-
-    const encoder = new TextEncoder()
-    await writeFile(filePath, encoder.encode(content))
-
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs')
+    await writeTextFile(filePath, content || '')
     return true
   } catch (error) {
     console.error('Failed to save file:', error)
@@ -475,11 +462,10 @@ export async function createFile(
   }
 
   try {
-    const { writeFile } = await import('@tauri-apps/plugin-fs')
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs')
 
     const filePath = `${dirPath}/${fileName}`
-    const encoder = new TextEncoder()
-    await writeFile(filePath, encoder.encode(content))
+    await writeTextFile(filePath, content)
 
     return filePath
   } catch (error) {
