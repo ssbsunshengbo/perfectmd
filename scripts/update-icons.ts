@@ -34,50 +34,54 @@ if (!existsSync(ICONS_DIR)) {
   mkdirSync(ICONS_DIR, { recursive: true })
 }
 
-// Generate different sizes
+// Generate different sizes - RGBA format required for Tauri
 const sizes = [32, 128, 256, 512]
 
 async function generateIcons() {
   console.log('Generating icons from:', sourceIcon)
   
-  // Load source image
+  // Load source image and ensure it has alpha channel
   const image = sharp(sourceIcon)
   
-  // Generate PNG files for each size
-  for (const size of sizes) {
-    const outputPath = join(ICONS_DIR, size === 256 ? '128x128@2x.png' : `${size}x${size}.png`)
-    await image
+  // Helper function to generate RGBA PNG
+  const generateRgbaPng = async (size: number): Promise<Buffer> => {
+    return image
       .clone()
       .resize(size, size, {
         fit: 'contain',
         background: { r: 255, g: 255, b: 255, alpha: 1 }
       })
-      .png()
-      .toFile(outputPath)
+      .ensureAlpha() // Ensure alpha channel exists
+      .png({ 
+        compressionLevel: 6,
+        force: true // Force PNG output
+      })
+      .toBuffer()
+  }
+
+  // Generate PNG files for each size
+  for (const size of sizes) {
+    const outputPath = join(ICONS_DIR, size === 256 ? '128x128@2x.png' : `${size}x${size}.png`)
+    const buffer = await generateRgbaPng(size)
+    writeFileSync(outputPath, buffer)
     console.log(`Generated: ${outputPath}`)
   }
   
   // Generate icon.png (512x512)
-  await image
-    .clone()
-    .resize(512, 512, {
-      fit: 'contain',
-      background: { r: 255, g: 255, b: 255, alpha: 1 }
-    })
-    .png()
-    .toFile(join(ICONS_DIR, 'icon.png'))
+  const iconPngBuffer = await generateRgbaPng(512)
+  writeFileSync(join(ICONS_DIR, 'icon.png'), iconPngBuffer)
   console.log('Generated: icon.png')
   
   // Generate ICO file for Windows (proper format)
   try {
-    // Generate ICO from multiple PNG sizes
+    // Generate ICO from multiple PNG sizes - all in RGBA
     const icoBuffer = await pngToIco([
-      await image.clone().resize(16, 16).png().toBuffer(),
-      await image.clone().resize(32, 32).png().toBuffer(),
-      await image.clone().resize(48, 48).png().toBuffer(),
-      await image.clone().resize(64, 64).png().toBuffer(),
-      await image.clone().resize(128, 128).png().toBuffer(),
-      await image.clone().resize(256, 256).png().toBuffer(),
+      await generateRgbaPng(16),
+      await generateRgbaPng(32),
+      await generateRgbaPng(48),
+      await generateRgbaPng(64),
+      await generateRgbaPng(128),
+      await generateRgbaPng(256),
     ])
     
     writeFileSync(join(ICONS_DIR, 'icon.ico'), icoBuffer)
@@ -87,16 +91,9 @@ async function generateIcons() {
     throw error
   }
   
-  // Generate ICNS for macOS (simplified - just copy 512x512 PNG)
-  // For proper ICNS, we would need a specialized tool
-  await image
-    .clone()
-    .resize(512, 512, {
-      fit: 'contain',
-      background: { r: 255, g: 255, b: 255, alpha: 1 }
-    })
-    .png()
-    .toFile(join(ICONS_DIR, 'icon.icns'))
+  // Generate ICNS for macOS - using 512x512 RGBA PNG
+  const icnsBuffer = await generateRgbaPng(512)
+  writeFileSync(join(ICONS_DIR, 'icon.icns'), icnsBuffer)
   console.log('Generated: icon.icns (placeholder - needs proper conversion for macOS)')
   
   console.log('\n✅ All icons generated successfully!')
