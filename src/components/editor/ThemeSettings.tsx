@@ -17,10 +17,10 @@ import {
   applyTheme,
   applyCustomCss,
   saveThemePreferences,
-  loadThemePreferences,
 } from '@/lib/themes'
+import { cssTemplates, cssDocumentation, type CssTemplate } from '@/lib/css-templates'
 import { useTheme } from 'next-themes'
-import { Palette, Check } from 'lucide-react'
+import { Palette, Check, Copy, BookOpen, CheckCircle } from 'lucide-react'
 
 interface ThemeSettingsProps {
   trigger?: React.ReactNode
@@ -29,7 +29,6 @@ interface ThemeSettingsProps {
 export function ThemeSettings({ trigger }: ThemeSettingsProps) {
   const { theme: mode, setTheme: setMode } = useTheme()
   const [selectedTheme, setSelectedTheme] = useState(() => {
-    // Initialize from localStorage on first render
     if (typeof window !== 'undefined') {
       return localStorage.getItem('perfectmd-theme') || 'default'
     }
@@ -42,6 +41,7 @@ export function ThemeSettings({ trigger }: ThemeSettingsProps) {
     return ''
   })
   const [isOpen, setIsOpen] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   // Apply theme when selectedTheme or mode changes
   const applySelectedTheme = useCallback(() => {
@@ -84,6 +84,22 @@ export function ThemeSettings({ trigger }: ThemeSettingsProps) {
     saveThemePreferences(selectedTheme, '')
   }
 
+  const applyTemplate = (template: CssTemplate) => {
+    setCustomCss(template.css)
+    applyCustomCss(template.css)
+    saveThemePreferences(selectedTheme, template.css)
+  }
+
+  const copyTemplate = async (template: CssTemplate) => {
+    try {
+      await navigator.clipboard.writeText(template.css)
+      setCopiedId(template.id)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -94,15 +110,16 @@ export function ThemeSettings({ trigger }: ThemeSettingsProps) {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Theme Settings</DialogTitle>
         </DialogHeader>
 
         <Tabs defaultValue="presets" className="mt-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="presets">Presets</TabsTrigger>
             <TabsTrigger value="mode">Light/Dark</TabsTrigger>
+            <TabsTrigger value="templates">Templates</TabsTrigger>
             <TabsTrigger value="custom">Custom CSS</TabsTrigger>
           </TabsList>
 
@@ -163,6 +180,95 @@ export function ThemeSettings({ trigger }: ThemeSettingsProps) {
             </div>
           </TabsContent>
 
+          {/* CSS Templates */}
+          <TabsContent value="templates" className="mt-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>CSS Theme Templates</Label>
+                <span className="text-xs text-muted-foreground">Click to apply or copy</span>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {cssTemplates.map((template) => (
+                  <div
+                    key={template.id}
+                    className="rounded-lg border border-border overflow-hidden hover:border-primary/50 transition-colors"
+                  >
+                    {/* Preview */}
+                    <div
+                      className="h-20 relative"
+                      style={{ 
+                        background: template.preview.bgColor,
+                      }}
+                    >
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span 
+                          className="text-lg font-semibold px-3 py-1 rounded"
+                          style={{ 
+                            color: template.preview.textColor,
+                            background: 'rgba(255,255,255,0.2)'
+                          }}
+                        >
+                          Aa
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Info */}
+                    <div className="p-3 bg-card">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <div className="font-medium text-sm">{template.name}</div>
+                          <div className="text-xs text-muted-foreground">{template.description}</div>
+                        </div>
+                        {customCss === template.css && (
+                          <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                        )}
+                      </div>
+                      
+                      {/* Actions */}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => applyTemplate(template)}
+                          className="flex-1 h-8 text-xs"
+                        >
+                          Apply
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyTemplate(template)}
+                          className="h-8 text-xs gap-1"
+                        >
+                          {copiedId === template.id ? (
+                            <>
+                              <CheckCircle className="h-3 w-3" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" />
+                              Copy
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground">
+                <p className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  <strong>Tip:</strong> Apply a template first, then switch to "Custom CSS" tab to modify it further.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+
           {/* Custom CSS */}
           <TabsContent value="custom" className="mt-4">
             <div className="space-y-4">
@@ -191,7 +297,7 @@ export function ThemeSettings({ trigger }: ThemeSettingsProps) {
 .ProseMirror h1 {
   color: #your-color;
 }`}
-                className="font-mono text-sm min-h-[200px]"
+                className="font-mono text-sm min-h-[250px]"
               />
               <p className="text-xs text-muted-foreground">
                 Add custom CSS to override default styles. Changes are applied immediately.
@@ -199,6 +305,22 @@ export function ThemeSettings({ trigger }: ThemeSettingsProps) {
             </div>
           </TabsContent>
         </Tabs>
+        
+        {/* CSS Documentation */}
+        <div className="mt-6 border-t pt-4">
+          <details className="group">
+            <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium hover:text-primary transition-colors">
+              <BookOpen className="h-4 w-4" />
+              CSS Customization Guide
+              <span className="text-muted-foreground group-open:hidden">(click to expand)</span>
+            </summary>
+            <div className="mt-4 p-4 bg-muted/30 rounded-lg overflow-x-auto">
+              <pre className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                {cssDocumentation}
+              </pre>
+            </div>
+          </details>
+        </div>
       </DialogContent>
     </Dialog>
   )
