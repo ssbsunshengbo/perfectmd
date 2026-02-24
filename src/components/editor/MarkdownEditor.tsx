@@ -41,6 +41,9 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
   })
   const isInternalChange = useRef(false)
   const shouldResetInlineTypingRef = useRef(false)
+  // Track IME composition state – while composing CJK/etc. input we must not
+  // intercept keydown events or manipulate the selection.
+  const isComposingRef = useRef(false)
 
   // Handle input changes
   const handleInput = useCallback(() => {
@@ -1001,6 +1004,11 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Do not intercept anything while an IME composition is in progress.
+    // e.nativeEvent.isComposing catches the first keydown on Safari/Firefox where
+    // compositionstart fires after keydown; isComposingRef covers subsequent keys.
+    if (e.nativeEvent.isComposing || isComposingRef.current) return
+
     if (e.key === 'Enter' && !e.shiftKey) {
       const inBulletList = document.queryCommandState('insertUnorderedList')
       const inOrderedList = document.queryCommandState('insertOrderedList')
@@ -1130,6 +1138,13 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         className="prose-editor h-full min-h-[calc(100vh-200px)] p-8 outline-none focus:outline-none overflow-auto"
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onCompositionStart={() => { isComposingRef.current = true }}
+        onCompositionEnd={() => {
+          isComposingRef.current = false
+          // After IME commits text, reset the inline-typing state so the next
+          // real keydown doesn't accidentally inherit inline formatting.
+          shouldResetInlineTypingRef.current = false
+        }}
         suppressContentEditableWarning
         data-placeholder="Start writing..."
       />
