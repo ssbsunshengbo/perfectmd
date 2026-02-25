@@ -274,54 +274,37 @@ async function exportToPdfWeb(title: string, content: string): Promise<boolean> 
 
 async function exportToPdfTauri(title: string, content: string): Promise<boolean> {
   try {
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs')
+    
+    // Let user choose where to save
+    const filePath = await save({
+      defaultPath: `${title}.html`,
+      filters: [
+        { name: 'HTML Document', extensions: ['html'] },
+        { name: 'PDF Document (Open in browser)', extensions: ['pdf'] }
+      ],
+    })
+
+    if (!filePath) {
+      return false // User cancelled
+    }
+
     // Convert content to Markdown first, then to printable HTML
     const markdownContent = htmlToMarkdown(content)
     const html = generatePrintableHtml(title, markdownContent)
     
-    // Create a hidden iframe for printing
-    const printFrame = document.createElement('iframe')
-    printFrame.style.position = 'fixed'
-    printFrame.style.right = '0'
-    printFrame.style.bottom = '0'
-    printFrame.style.width = '0'
-    printFrame.style.height = '0'
-    printFrame.style.border = 'none'
-    printFrame.style.opacity = '0'
-    printFrame.style.pointerEvents = 'none'
+    // Save the HTML file
+    await writeTextFile(filePath, html)
     
-    document.body.appendChild(printFrame)
-    
-    const printDocument = printFrame.contentDocument || printFrame.contentWindow?.document
-    
-    if (!printDocument) {
-      document.body.removeChild(printFrame)
-      return false
+    // Open the file with system default browser for printing to PDF
+    try {
+      const { open } = await import('@tauri-apps/plugin-shell')
+      await open(filePath)
+    } catch (e) {
+      console.log('Could not auto-open file, but file was saved:', filePath)
     }
     
-    printDocument.open()
-    printDocument.write(html)
-    printDocument.close()
-    
-    // Wait for content to load then print
-    printFrame.onload = () => {
-      setTimeout(() => {
-        try {
-          printFrame.contentWindow?.print()
-        } catch (e) {
-          console.error('Print failed:', e)
-        }
-        // Clean up after print dialog opens
-        setTimeout(() => {
-          document.body.removeChild(printFrame)
-        }, 1000)
-      }, 300)
-    }
-    
-    // Trigger onload for already loaded content
-    if (printDocument.readyState === 'complete') {
-      printFrame.onload(null as any)
-    }
-
     return true
   } catch (error) {
     console.error('Failed to export:', error)

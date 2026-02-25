@@ -20,6 +20,7 @@
     "fs:allow-remove",
     "fs:allow-rename",
     "fs:allow-read-dir",
+    "shell:allow-open",
     {
       "identifier": "fs:scope",
       "allow": [
