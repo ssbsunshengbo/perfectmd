@@ -99,11 +99,15 @@ export function Header() {
   }
 
   const handleExportPdf = async () => {
-    const result = await exportAsPdf()
-    if (result) {
-      toast.success('PDF exported successfully!')
-    } else {
-      toast.error('Failed to export PDF')
+    try {
+      const result = await exportAsPdf()
+      if (result) {
+        toast.success('PDF exported successfully!')
+      }
+      // If result is false, it means user cancelled the save dialog
+    } catch (error) {
+      console.error('Export PDF error:', error)
+      toast.error(`Failed to export PDF: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

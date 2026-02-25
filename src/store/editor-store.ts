@@ -393,12 +393,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { currentDocument } = get()
     if (!currentDocument) return false
 
-    try {
-      return await exportToPdf(currentDocument.title, currentDocument.content)
-    } catch (error) {
-      console.error('Failed to export PDF:', error)
-      return false
-    }
+    // Don't catch errors here - let the caller handle them
+    return await exportToPdf(currentDocument.title, currentDocument.content)
   },
 
   // Directory management

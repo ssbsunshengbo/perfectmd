@@ -325,9 +325,10 @@ async function exportToPdfWeb(title: string, content: string): Promise<boolean> 
 
 async function exportToPdfTauri(title: string, content: string): Promise<boolean> {
   try {
+    console.log('Starting PDF export...')
     const { save } = await import('@tauri-apps/plugin-dialog')
-    const { writeFile } = await import('@tauri-apps/plugin-fs')
     
+    console.log('Opening save dialog...')
     // Let user choose where to save
     const filePath = await save({
       defaultPath: `${title}.pdf`,
@@ -335,82 +336,123 @@ async function exportToPdfTauri(title: string, content: string): Promise<boolean
     })
 
     if (!filePath) {
+      console.log('User cancelled save dialog')
       return false // User cancelled
     }
 
+    console.log('User selected path:', filePath)
+    
     // Convert HTML content to Markdown text
     const markdownContent = htmlToMarkdown(content)
+    console.log('Content length:', markdownContent.length)
     
-    // Create a temporary container for rendering
-    const container = document.createElement('div')
-    container.style.cssText = `
-      position: fixed;
-      left: -9999px;
-      top: 0;
-      width: 210mm;
-      padding: 20mm;
-      background: white;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-      font-size: 12pt;
-      line-height: 1.6;
-      color: #333;
-    `
-    
-    // Create styled content
-    container.innerHTML = `
-      <h1 style="font-size: 24pt; margin-bottom: 20pt; color: #111;">${title}</h1>
-      <div style="white-space: pre-wrap; word-wrap: break-word;">${markdownContent}</div>
-    `
-    
-    document.body.appendChild(container)
-    
-    // Convert to canvas
-    const canvas = await html2canvas(container, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff'
-    })
-    
-    document.body.removeChild(container)
-    
-    // Create PDF
+    // Create PDF using jsPDF's text rendering (more reliable than html2canvas)
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4'
     })
     
-    // Add image to PDF (A4: 210mm x 297mm)
-    const imgWidth = 210
-    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    // Set font
+    pdf.setFont('helvetica')
+    
+    // Add title
+    pdf.setFontSize(24)
+    pdf.text(title, 20, 30)
+    
+    // Add content
+    pdf.setFontSize(12)
+    const pageWidth = 210
     const pageHeight = 297
-    let heightLeft = imgHeight
-    let position = 0
+    const margin = 20
+    const maxWidth = pageWidth - 2 * margin
+    const lineHeight = 7
+    let y = 50
     
-    // Add first page
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight)
-    heightLeft -= pageHeight
+    // Split content into lines and handle pagination
+    const lines = markdownContent.split('\n')
     
-    // Add more pages if needed
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight
-      pdf.addPage()
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pageHeight
+    for (const line of lines) {
+      // Check if we need a new page
+      if (y > pageHeight - margin) {
+        pdf.addPage()
+        y = margin
+      }
+      
+      // Handle empty lines
+      if (!line.trim()) {
+        y += lineHeight / 2
+        continue
+      }
+      
+      // Handle headers
+      if (line.startsWith('# ')) {
+        pdf.setFontSize(20)
+        pdf.setFont('helvetica', 'bold')
+        const text = line.substring(2)
+        const splitText = pdf.splitTextToSize(text, maxWidth)
+        pdf.text(splitText, margin, y)
+        y += splitText.length * lineHeight + 3
+        pdf.setFontSize(12)
+        pdf.setFont('helvetica', 'normal')
+      } else if (line.startsWith('## ')) {
+        pdf.setFontSize(16)
+        pdf.setFont('helvetica', 'bold')
+        const text = line.substring(3)
+        const splitText = pdf.splitTextToSize(text, maxWidth)
+        pdf.text(splitText, margin, y)
+        y += splitText.length * lineHeight + 2
+        pdf.setFontSize(12)
+        pdf.setFont('helvetica', 'normal')
+      } else if (line.startsWith('### ')) {
+        pdf.setFontSize(14)
+        pdf.setFont('helvetica', 'bold')
+        const text = line.substring(4)
+        const splitText = pdf.splitTextToSize(text, maxWidth)
+        pdf.text(splitText, margin, y)
+        y += splitText.length * lineHeight + 2
+        pdf.setFontSize(12)
+        pdf.setFont('helvetica', 'normal')
+      } else if (line.startsWith('- ') || line.startsWith('* ')) {
+        // List items
+        const text = '• ' + line.substring(2)
+        const splitText = pdf.splitTextToSize(text, maxWidth - 5)
+        pdf.text(splitText, margin + 5, y)
+        y += splitText.length * lineHeight
+      } else {
+        // Regular text
+        const splitText = pdf.splitTextToSize(line, maxWidth)
+        pdf.text(splitText, margin, y)
+        y += splitText.length * lineHeight
+      }
     }
     
-    // Get PDF as Uint8Array
-    const pdfOutput = pdf.output('arraybuffer')
-    const pdfData = new Uint8Array(pdfOutput)
+    // Get PDF as base64 and convert to Uint8Array
+    console.log('Generating PDF binary...')
+    const pdfBase64 = pdf.output('datauristring')
+    // Extract base64 data from data URI
+    const base64Data = pdfBase64.split(',')[1]
+    const binaryString = atob(base64Data)
+    const pdfData = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      pdfData[i] = binaryString.charCodeAt(i)
+    }
+    console.log('PDF size:', pdfData.length, 'bytes')
     
     // Save using Tauri fs
+    console.log('Writing file to:', filePath)
+    const { writeFile } = await import('@tauri-apps/plugin-fs')
     await writeFile(filePath, pdfData)
+    console.log('PDF saved successfully!')
     
     return true
   } catch (error) {
-    console.error('Failed to export:', error)
-    return false
+    console.error('Failed to export PDF:', error)
+    if (error instanceof Error) {
+      console.error('Error message:', error.message)
+      console.error('Error stack:', error.stack)
+    }
+    throw error // Re-throw to let caller know the error
   }
 }
 
