@@ -101,11 +101,9 @@ export function Header() {
   const handleExportPdf = async () => {
     const result = await exportAsPdf()
     if (result) {
-      toast.success('Document exported! The file will open in your browser where you can print to PDF.', {
-        duration: 5000
-      })
+      toast.success('PDF exported successfully!')
     } else {
-      toast.error('Failed to export document')
+      toast.error('Failed to export PDF')
     }
   }
 
@@ -164,7 +162,7 @@ export function Header() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleExportPdf}>
                   <FileDown className="mr-2 h-4 w-4" />
-                  Export as HTML/PDF
+                  Export as PDF
                 </DropdownMenuItem>
                 {isTauri() && (
                   <>

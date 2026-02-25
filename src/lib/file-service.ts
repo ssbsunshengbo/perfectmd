@@ -1,5 +1,7 @@
 // File system service - works in both Web and Tauri environments
 import { htmlToMarkdown } from './html-to-markdown'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 
 export interface FileInfo {
   name: string
@@ -249,22 +251,71 @@ export async function exportToPdf(title: string, content: string): Promise<boole
 
 async function exportToPdfWeb(title: string, content: string): Promise<boolean> {
   try {
-    // Create a printable HTML version
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) {
-      alert('Please allow popups to export PDF')
-      return false
+    // Convert HTML content to Markdown text
+    const markdownContent = htmlToMarkdown(content)
+    
+    // Create a temporary container for rendering
+    const container = document.createElement('div')
+    container.style.cssText = `
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: 210mm;
+      padding: 20mm;
+      background: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      font-size: 12pt;
+      line-height: 1.6;
+      color: #333;
+    `
+    
+    // Create styled content
+    container.innerHTML = `
+      <h1 style="font-size: 24pt; margin-bottom: 20pt; color: #111;">${title}</h1>
+      <div style="white-space: pre-wrap; word-wrap: break-word;">${markdownContent}</div>
+    `
+    
+    document.body.appendChild(container)
+    
+    // Convert to canvas
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff'
+    })
+    
+    document.body.removeChild(container)
+    
+    // Create PDF
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    })
+    
+    // Add image to PDF (A4: 210mm x 297mm)
+    const imgWidth = 210
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    const pageHeight = 297
+    let heightLeft = imgHeight
+    let position = 0
+    
+    // Add first page
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight)
+    heightLeft -= pageHeight
+    
+    // Add more pages if needed
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight
+      pdf.addPage()
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
     }
-
-    const html = generatePrintableHtml(title, content)
-    printWindow.document.write(html)
-    printWindow.document.close()
-
-    // Wait for content to load then print
-    setTimeout(() => {
-      printWindow.print()
-    }, 500)
-
+    
+    // Save the PDF
+    pdf.save(`${title}.pdf`)
+    
     return true
   } catch (error) {
     console.error('Failed to export PDF:', error)
@@ -275,26 +326,86 @@ async function exportToPdfWeb(title: string, content: string): Promise<boolean> 
 async function exportToPdfTauri(title: string, content: string): Promise<boolean> {
   try {
     const { save } = await import('@tauri-apps/plugin-dialog')
-    const { writeTextFile } = await import('@tauri-apps/plugin-fs')
+    const { writeFile } = await import('@tauri-apps/plugin-fs')
     
     // Let user choose where to save
     const filePath = await save({
-      defaultPath: `${title}.html`,
-      filters: [
-        { name: 'HTML Document', extensions: ['html'] }
-      ],
+      defaultPath: `${title}.pdf`,
+      filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
     })
 
     if (!filePath) {
       return false // User cancelled
     }
 
-    // Convert content to Markdown first, then to printable HTML
+    // Convert HTML content to Markdown text
     const markdownContent = htmlToMarkdown(content)
-    const html = generatePrintableHtml(title, markdownContent)
     
-    // Save the HTML file
-    await writeTextFile(filePath, html)
+    // Create a temporary container for rendering
+    const container = document.createElement('div')
+    container.style.cssText = `
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: 210mm;
+      padding: 20mm;
+      background: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      font-size: 12pt;
+      line-height: 1.6;
+      color: #333;
+    `
+    
+    // Create styled content
+    container.innerHTML = `
+      <h1 style="font-size: 24pt; margin-bottom: 20pt; color: #111;">${title}</h1>
+      <div style="white-space: pre-wrap; word-wrap: break-word;">${markdownContent}</div>
+    `
+    
+    document.body.appendChild(container)
+    
+    // Convert to canvas
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff'
+    })
+    
+    document.body.removeChild(container)
+    
+    // Create PDF
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    })
+    
+    // Add image to PDF (A4: 210mm x 297mm)
+    const imgWidth = 210
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    const pageHeight = 297
+    let heightLeft = imgHeight
+    let position = 0
+    
+    // Add first page
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight)
+    heightLeft -= pageHeight
+    
+    // Add more pages if needed
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight
+      pdf.addPage()
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+    }
+    
+    // Get PDF as Uint8Array
+    const pdfOutput = pdf.output('arraybuffer')
+    const pdfData = new Uint8Array(pdfOutput)
+    
+    // Save using Tauri fs
+    await writeFile(filePath, pdfData)
     
     return true
   } catch (error) {
