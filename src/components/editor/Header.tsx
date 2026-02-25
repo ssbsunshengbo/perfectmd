@@ -102,14 +102,13 @@ export function Header() {
     try {
       const result = await exportAsPdf()
       if (result) {
-        toast.success('正在打开浏览器进行打印，请在浏览器中选择"另存为PDF"保存文档。', {
+        toast.success('打印窗口已打开，请在打印对话框中选择"另存为PDF"保存文档。', {
           duration: 5000
         })
       }
-      // If result is false, it means user cancelled the print dialog
     } catch (error) {
       console.error('Export PDF error:', error)
-      toast.error(`Failed to export PDF: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(`导出PDF失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
   }
 
