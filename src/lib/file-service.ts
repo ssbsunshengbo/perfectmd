@@ -281,8 +281,7 @@ async function exportToPdfTauri(title: string, content: string): Promise<boolean
     const filePath = await save({
       defaultPath: `${title}.html`,
       filters: [
-        { name: 'HTML Document', extensions: ['html'] },
-        { name: 'PDF Document (Open in browser)', extensions: ['pdf'] }
+        { name: 'HTML Document', extensions: ['html'] }
       ],
     })
 
@@ -296,14 +295,6 @@ async function exportToPdfTauri(title: string, content: string): Promise<boolean
     
     // Save the HTML file
     await writeTextFile(filePath, html)
-    
-    // Open the file with system default browser for printing to PDF
-    try {
-      const { open } = await import('@tauri-apps/plugin-shell')
-      await open(filePath)
-    } catch (e) {
-      console.log('Could not auto-open file, but file was saved:', filePath)
-    }
     
     return true
   } catch (error) {
