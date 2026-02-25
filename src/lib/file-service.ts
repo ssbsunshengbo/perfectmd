@@ -238,13 +238,38 @@ async function importMarkdownFileTauri(): Promise<{ content: string; name: strin
   }
 }
 
-// Export to PDF - uses system print dialog
+// Export to PDF - uses Tauri native print or browser print
 export async function exportToPdf(title: string, content: string): Promise<boolean> {
   try {
-    // Generate printable HTML directly from HTML content (no Markdown conversion)
+    // Generate printable HTML directly from HTML content
     const printHtml = generatePrintableHtmlFromHtml(title, content)
     
-    // Create a hidden iframe for printing
+    if (isTauri()) {
+      // For Tauri desktop app, use the native print API
+      try {
+        const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow')
+        const webview = getCurrentWebviewWindow()
+        
+        // Create a temporary HTML file and open it in a new webview for printing
+        // First, save the HTML to a temp file
+        const { writeFile } = await import('@tauri-apps/plugin-fs')
+        const tempPath = await getTempFilePath('print')
+        
+        const encoder = new TextEncoder()
+        await writeFile(tempPath, encoder.encode(printHtml))
+        
+        // Use shell to open the HTML file in the default browser
+        const { open } = await import('@tauri-apps/plugin-shell')
+        await open(tempPath)
+        
+        return true
+      } catch (e) {
+        console.error('Tauri print API failed:', e)
+        // Fall back to browser print
+      }
+    }
+    
+    // For web browser or fallback, use hidden iframe
     const printFrame = document.createElement('iframe')
     printFrame.id = 'perfectmd-print-frame'
     printFrame.style.cssText = `
@@ -273,26 +298,33 @@ export async function exportToPdf(title: string, content: string): Promise<boole
     printDoc.close()
     
     // Small delay to ensure content is rendered
-    await new Promise(resolve => setTimeout(resolve, 300))
+    await new Promise(resolve => setTimeout(resolve, 500))
     
     // Trigger print
     printFrame.contentWindow?.focus()
     printFrame.contentWindow?.print()
     
-    // Clean up iframe after a reasonable delay
-    // This gives the print dialog time to process
+    // Clean up iframe after delay
     setTimeout(() => {
       const frame = document.getElementById('perfectmd-print-frame')
       if (frame && frame.parentNode) {
         frame.parentNode.removeChild(frame)
       }
-    }, 10000) // 10 seconds should be enough for user to interact
+    }, 10000)
     
     return true
   } catch (error) {
     console.error('Failed to export PDF:', error)
     throw error
   }
+}
+
+// Get temp file path for printing
+async function getTempFilePath(prefix: string): Promise<string> {
+  const { tempDir } = await import('@tauri-apps/api/path')
+  const temp = await tempDir()
+  const fileName = `${prefix}_${Date.now()}.html`
+  return `${temp}${fileName}`
 }
 
 // Generate printable HTML directly from HTML content

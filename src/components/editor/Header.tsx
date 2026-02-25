@@ -102,7 +102,7 @@ export function Header() {
     try {
       const result = await exportAsPdf()
       if (result) {
-        toast.success('Print dialog opened. Please select "Save as PDF" to save your document.', {
+        toast.success('正在打开浏览器进行打印，请在浏览器中选择"另存为PDF"保存文档。', {
           duration: 5000
         })
       }
