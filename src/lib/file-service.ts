@@ -1,4 +1,5 @@
 // File system service - works in both Web and Tauri environments
+import { htmlToMarkdown } from './html-to-markdown'
 
 export interface FileInfo {
   name: string
@@ -273,45 +274,52 @@ async function exportToPdfWeb(title: string, content: string): Promise<boolean> 
 
 async function exportToPdfTauri(title: string, content: string): Promise<boolean> {
   try {
-    // Create a new window with the content for printing
-    // The user can use "Print to PDF" from the print dialog
-    const html = generatePrintableHtml(title, content)
+    // Convert content to Markdown first, then to printable HTML
+    const markdownContent = htmlToMarkdown(content)
+    const html = generatePrintableHtml(title, markdownContent)
     
-    // Create a Blob URL for the HTML content
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
+    // Create a hidden iframe for printing
+    const printFrame = document.createElement('iframe')
+    printFrame.style.position = 'fixed'
+    printFrame.style.right = '0'
+    printFrame.style.bottom = '0'
+    printFrame.style.width = '0'
+    printFrame.style.height = '0'
+    printFrame.style.border = 'none'
+    printFrame.style.opacity = '0'
+    printFrame.style.pointerEvents = 'none'
     
-    // Open in a new window
-    const printWindow = window.open(url, '_blank')
+    document.body.appendChild(printFrame)
     
-    if (!printWindow) {
-      // Fallback: save as HTML if popup blocked
-      const { save } = await import('@tauri-apps/plugin-dialog')
-      const { writeTextFile } = await import('@tauri-apps/plugin-fs')
-      
-      const filePath = await save({
-        defaultPath: `${title}.html`,
-        filters: [
-          { name: 'PDF (Print to file)', extensions: ['pdf'] },
-          { name: 'HTML', extensions: ['html'] }
-        ],
-      })
-
-      if (!filePath) {
-        return false
-      }
-
-      await writeTextFile(filePath, html)
-      return true
+    const printDocument = printFrame.contentDocument || printFrame.contentWindow?.document
+    
+    if (!printDocument) {
+      document.body.removeChild(printFrame)
+      return false
     }
     
+    printDocument.open()
+    printDocument.write(html)
+    printDocument.close()
+    
     // Wait for content to load then print
-    printWindow.onload = () => {
+    printFrame.onload = () => {
       setTimeout(() => {
-        printWindow.print()
-        // Clean up the blob URL after printing
-        setTimeout(() => URL.revokeObjectURL(url), 1000)
-      }, 500)
+        try {
+          printFrame.contentWindow?.print()
+        } catch (e) {
+          console.error('Print failed:', e)
+        }
+        // Clean up after print dialog opens
+        setTimeout(() => {
+          document.body.removeChild(printFrame)
+        }, 1000)
+      }, 300)
+    }
+    
+    // Trigger onload for already loaded content
+    if (printDocument.readyState === 'complete') {
+      printFrame.onload(null as any)
     }
 
     return true
@@ -335,7 +343,10 @@ export async function saveMarkdownFile(
 
 async function saveMarkdownFileWeb(content: string, defaultName: string): Promise<string | null> {
   try {
-    const blob = new Blob([content], { type: 'text/markdown' })
+    // Convert HTML content to Markdown format for compatibility
+    const markdownContent = htmlToMarkdown(content)
+    
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -370,8 +381,11 @@ async function saveMarkdownFileTauri(
 
     console.log('User selected path:', filePath)
 
+    // Convert HTML content to Markdown format for compatibility
+    const markdownContent = htmlToMarkdown(content)
+    
     // Use writeTextFile for simpler string content handling
-    await writeTextFile(filePath, content || '')
+    await writeTextFile(filePath, markdownContent)
     
     console.log('File saved successfully:', filePath)
     return filePath
@@ -470,7 +484,14 @@ export async function saveFileToPath(
 
   try {
     const { writeTextFile } = await import('@tauri-apps/plugin-fs')
-    await writeTextFile(filePath, content || '')
+    
+    // Convert HTML to Markdown for .md files
+    let contentToSave = content || ''
+    if (filePath.endsWith('.md')) {
+      contentToSave = htmlToMarkdown(content)
+    }
+    
+    await writeTextFile(filePath, contentToSave)
     return true
   } catch (error) {
     console.error('Failed to save file:', error)
@@ -491,7 +512,14 @@ export async function createFile(
     const { writeTextFile } = await import('@tauri-apps/plugin-fs')
 
     const filePath = `${dirPath}/${fileName}`
-    await writeTextFile(filePath, content)
+    
+    // Convert HTML to Markdown for .md files
+    let contentToSave = content
+    if (fileName.endsWith('.md')) {
+      contentToSave = htmlToMarkdown(content)
+    }
+    
+    await writeTextFile(filePath, contentToSave)
 
     return filePath
   } catch (error) {

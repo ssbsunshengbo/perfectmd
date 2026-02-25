@@ -249,11 +249,16 @@ function convertTable(table: Element): string {
   return result + '\n'
 }
 
-export function htmlToMarkdown(html: string, title: string): string {
+export function htmlToMarkdown(html: string, title?: string): string {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
   
-  let markdown = `# ${title}\n\n`
+  let markdown = ''
+  
+  // Add title if provided
+  if (title) {
+    markdown = `# ${title}\n\n`
+  }
   
   for (const child of doc.body.childNodes) {
     markdown += processNode(child)
