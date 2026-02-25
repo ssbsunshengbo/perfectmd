@@ -102,9 +102,11 @@ export function Header() {
     try {
       const result = await exportAsPdf()
       if (result) {
-        toast.success('PDF exported successfully!')
+        toast.success('Print dialog opened. Please select "Save as PDF" to save your document.', {
+          duration: 5000
+        })
       }
-      // If result is false, it means user cancelled the save dialog
+      // If result is false, it means user cancelled the print dialog
     } catch (error) {
       console.error('Export PDF error:', error)
       toast.error(`Failed to export PDF: ${error instanceof Error ? error.message : 'Unknown error'}`)

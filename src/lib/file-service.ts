@@ -1,7 +1,5 @@
 // File system service - works in both Web and Tauri environments
 import { htmlToMarkdown } from './html-to-markdown'
-import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 
 export interface FileInfo {
   name: string
@@ -240,220 +238,353 @@ async function importMarkdownFileTauri(): Promise<{ content: string; name: strin
   }
 }
 
-// Export to PDF
+// Export to PDF - uses system print dialog
 export async function exportToPdf(title: string, content: string): Promise<boolean> {
-  if (isTauri()) {
-    return exportToPdfTauri(title, content)
-  } else {
-    return exportToPdfWeb(title, content)
+  try {
+    // Convert HTML content to Markdown
+    const markdownContent = htmlToMarkdown(content)
+    
+    // Generate printable HTML with proper styling
+    const printHtml = generatePrintableHtml(title, markdownContent)
+    
+    // Create a hidden iframe for printing
+    const printFrame = document.createElement('iframe')
+    printFrame.style.position = 'fixed'
+    printFrame.style.right = '0'
+    printFrame.style.bottom = '0'
+    printFrame.style.width = '0'
+    printFrame.style.height = '0'
+    printFrame.style.border = 'none'
+    printFrame.style.opacity = '0'
+    
+    document.body.appendChild(printFrame)
+    
+    const printDoc = printFrame.contentDocument || printFrame.contentWindow?.document
+    
+    if (!printDoc) {
+      document.body.removeChild(printFrame)
+      return false
+    }
+    
+    printDoc.open()
+    printDoc.write(printHtml)
+    printDoc.close()
+    
+    // Wait for content to load then print
+    return new Promise((resolve) => {
+      const doPrint = () => {
+        try {
+          printFrame.contentWindow?.focus()
+          printFrame.contentWindow?.print()
+          
+          // Clean up after print dialog opens
+          setTimeout(() => {
+            try {
+              document.body.removeChild(printFrame)
+            } catch (e) {}
+          }, 1000)
+          
+          resolve(true)
+        } catch (e) {
+          console.error('Print failed:', e)
+          try {
+            document.body.removeChild(printFrame)
+          } catch (err) {}
+          resolve(false)
+        }
+      }
+      
+      // Wait for iframe to load
+      printFrame.onload = () => {
+        setTimeout(doPrint, 100)
+      }
+      
+      // Fallback if onload doesn't fire
+      setTimeout(() => {
+        if (printFrame.parentNode) {
+          doPrint()
+        }
+      }, 500)
+    })
+  } catch (error) {
+    console.error('Failed to export PDF:', error)
+    throw error
   }
 }
 
-async function exportToPdfWeb(title: string, content: string): Promise<boolean> {
-  try {
-    // Convert HTML content to Markdown text
-    const markdownContent = htmlToMarkdown(content)
+// Generate printable HTML with proper Chinese font support
+function generatePrintableHtml(title: string, markdown: string): string {
+  // Convert markdown to HTML with proper formatting
+  const htmlContent = markdownToHtmlForPrint(markdown)
+  
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
     
-    // Create a temporary container for rendering
-    const container = document.createElement('div')
-    container.style.cssText = `
-      position: fixed;
-      left: -9999px;
-      top: 0;
-      width: 210mm;
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", sans-serif;
+      font-size: 12pt;
+      line-height: 1.8;
+      color: #333;
+      max-width: 210mm;
+      margin: 0 auto;
       padding: 20mm;
       background: white;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-      font-size: 12pt;
-      line-height: 1.6;
-      color: #333;
-    `
-    
-    // Create styled content
-    container.innerHTML = `
-      <h1 style="font-size: 24pt; margin-bottom: 20pt; color: #111;">${title}</h1>
-      <div style="white-space: pre-wrap; word-wrap: break-word;">${markdownContent}</div>
-    `
-    
-    document.body.appendChild(container)
-    
-    // Convert to canvas
-    const canvas = await html2canvas(container, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff'
-    })
-    
-    document.body.removeChild(container)
-    
-    // Create PDF
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    })
-    
-    // Add image to PDF (A4: 210mm x 297mm)
-    const imgWidth = 210
-    const imgHeight = (canvas.height * imgWidth) / canvas.width
-    const pageHeight = 297
-    let heightLeft = imgHeight
-    let position = 0
-    
-    // Add first page
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight)
-    heightLeft -= pageHeight
-    
-    // Add more pages if needed
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight
-      pdf.addPage()
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pageHeight
     }
     
-    // Save the PDF
-    pdf.save(`${title}.pdf`)
+    h1 {
+      font-size: 24pt;
+      font-weight: bold;
+      margin-bottom: 20pt;
+      color: #111;
+      padding-bottom: 10pt;
+      border-bottom: 2px solid #333;
+    }
     
-    return true
-  } catch (error) {
-    console.error('Failed to export PDF:', error)
-    return false
-  }
+    h2 {
+      font-size: 18pt;
+      font-weight: bold;
+      margin-top: 20pt;
+      margin-bottom: 10pt;
+      color: #222;
+    }
+    
+    h3 {
+      font-size: 14pt;
+      font-weight: bold;
+      margin-top: 15pt;
+      margin-bottom: 8pt;
+      color: #333;
+    }
+    
+    p {
+      margin: 10pt 0;
+      text-align: justify;
+    }
+    
+    ul, ol {
+      margin: 10pt 0;
+      padding-left: 20pt;
+    }
+    
+    li {
+      margin: 5pt 0;
+    }
+    
+    blockquote {
+      margin: 15pt 0;
+      padding: 10pt 15pt;
+      border-left: 4px solid #666;
+      background: #f5f5f5;
+      color: #555;
+    }
+    
+    code {
+      font-family: "SF Mono", "Fira Code", Consolas, Monaco, monospace;
+      background: #f0f0f0;
+      padding: 2pt 6pt;
+      border-radius: 3pt;
+      font-size: 10pt;
+    }
+    
+    pre {
+      margin: 15pt 0;
+      padding: 15pt;
+      background: #2d2d2d;
+      color: #f8f8f2;
+      border-radius: 5pt;
+      overflow-x: auto;
+      font-family: "SF Mono", "Fira Code", Consolas, Monaco, monospace;
+      font-size: 10pt;
+      line-height: 1.5;
+    }
+    
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+    }
+    
+    hr {
+      border: none;
+      border-top: 1px solid #ccc;
+      margin: 20pt 0;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15pt 0;
+    }
+    
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8pt;
+      text-align: left;
+    }
+    
+    th {
+      background: #f5f5f5;
+      font-weight: bold;
+    }
+    
+    a {
+      color: #0066cc;
+      text-decoration: none;
+    }
+    
+    @media print {
+      body {
+        padding: 0;
+      }
+      
+      @page {
+        margin: 20mm;
+        size: A4 portrait;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  ${htmlContent}
+</body>
+</html>`
 }
 
-async function exportToPdfTauri(title: string, content: string): Promise<boolean> {
-  try {
-    console.log('Starting PDF export...')
-    const { save } = await import('@tauri-apps/plugin-dialog')
-    
-    console.log('Opening save dialog...')
-    // Let user choose where to save
-    const filePath = await save({
-      defaultPath: `${title}.pdf`,
-      filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
-    })
-
-    if (!filePath) {
-      console.log('User cancelled save dialog')
-      return false // User cancelled
-    }
-
-    console.log('User selected path:', filePath)
-    
-    // Convert HTML content to Markdown text
-    const markdownContent = htmlToMarkdown(content)
-    console.log('Content length:', markdownContent.length)
-    
-    // Create PDF using jsPDF's text rendering (more reliable than html2canvas)
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    })
-    
-    // Set font
-    pdf.setFont('helvetica')
-    
-    // Add title
-    pdf.setFontSize(24)
-    pdf.text(title, 20, 30)
-    
-    // Add content
-    pdf.setFontSize(12)
-    const pageWidth = 210
-    const pageHeight = 297
-    const margin = 20
-    const maxWidth = pageWidth - 2 * margin
-    const lineHeight = 7
-    let y = 50
-    
-    // Split content into lines and handle pagination
-    const lines = markdownContent.split('\n')
-    
-    for (const line of lines) {
-      // Check if we need a new page
-      if (y > pageHeight - margin) {
-        pdf.addPage()
-        y = margin
-      }
-      
-      // Handle empty lines
-      if (!line.trim()) {
-        y += lineHeight / 2
-        continue
-      }
-      
-      // Handle headers
-      if (line.startsWith('# ')) {
-        pdf.setFontSize(20)
-        pdf.setFont('helvetica', 'bold')
-        const text = line.substring(2)
-        const splitText = pdf.splitTextToSize(text, maxWidth)
-        pdf.text(splitText, margin, y)
-        y += splitText.length * lineHeight + 3
-        pdf.setFontSize(12)
-        pdf.setFont('helvetica', 'normal')
-      } else if (line.startsWith('## ')) {
-        pdf.setFontSize(16)
-        pdf.setFont('helvetica', 'bold')
-        const text = line.substring(3)
-        const splitText = pdf.splitTextToSize(text, maxWidth)
-        pdf.text(splitText, margin, y)
-        y += splitText.length * lineHeight + 2
-        pdf.setFontSize(12)
-        pdf.setFont('helvetica', 'normal')
-      } else if (line.startsWith('### ')) {
-        pdf.setFontSize(14)
-        pdf.setFont('helvetica', 'bold')
-        const text = line.substring(4)
-        const splitText = pdf.splitTextToSize(text, maxWidth)
-        pdf.text(splitText, margin, y)
-        y += splitText.length * lineHeight + 2
-        pdf.setFontSize(12)
-        pdf.setFont('helvetica', 'normal')
-      } else if (line.startsWith('- ') || line.startsWith('* ')) {
-        // List items
-        const text = '• ' + line.substring(2)
-        const splitText = pdf.splitTextToSize(text, maxWidth - 5)
-        pdf.text(splitText, margin + 5, y)
-        y += splitText.length * lineHeight
-      } else {
-        // Regular text
-        const splitText = pdf.splitTextToSize(line, maxWidth)
-        pdf.text(splitText, margin, y)
-        y += splitText.length * lineHeight
-      }
-    }
-    
-    // Get PDF as base64 and convert to Uint8Array
-    console.log('Generating PDF binary...')
-    const pdfBase64 = pdf.output('datauristring')
-    // Extract base64 data from data URI
-    const base64Data = pdfBase64.split(',')[1]
-    const binaryString = atob(base64Data)
-    const pdfData = new Uint8Array(binaryString.length)
-    for (let i = 0; i < binaryString.length; i++) {
-      pdfData[i] = binaryString.charCodeAt(i)
-    }
-    console.log('PDF size:', pdfData.length, 'bytes')
-    
-    // Save using Tauri fs
-    console.log('Writing file to:', filePath)
-    const { writeFile } = await import('@tauri-apps/plugin-fs')
-    await writeFile(filePath, pdfData)
-    console.log('PDF saved successfully!')
-    
-    return true
-  } catch (error) {
-    console.error('Failed to export PDF:', error)
-    if (error instanceof Error) {
-      console.error('Error message:', error.message)
-      console.error('Error stack:', error.stack)
-    }
-    throw error // Re-throw to let caller know the error
+// Convert markdown to HTML for printing
+function markdownToHtmlForPrint(markdown: string): string {
+  if (!markdown) return ''
+  
+  const lines = markdown.split('\n')
+  const htmlParts: string[] = []
+  let inCodeBlock = false
+  let codeContent: string[] = []
+  let inList = false
+  let listType = ''
+  let listItems: string[] = []
+  
+  const processInline = (text: string): string => {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(.+?)__/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/_(.+?)_/g, '<em>$1</em>')
+      .replace(/~~(.+?)~~/g, '<del>$1</del>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
   }
+  
+  const flushList = () => {
+    if (inList && listItems.length > 0) {
+      const tag = listType === 'ul' ? 'ul' : 'ol'
+      htmlParts.push(`<${tag}>${listItems.map(item => `<li>${item}</li>`).join('')}</${tag}>`)
+      listItems = []
+      inList = false
+    }
+  }
+  
+  for (const line of lines) {
+    // Code block
+    if (line.startsWith('```')) {
+      if (inCodeBlock) {
+        htmlParts.push(`<pre><code>${codeContent.join('\n')}</code></pre>`)
+        codeContent = []
+        inCodeBlock = false
+      } else {
+        flushList()
+        inCodeBlock = true
+      }
+      continue
+    }
+    
+    if (inCodeBlock) {
+      codeContent.push(escapeHtml(line))
+      continue
+    }
+    
+    // Horizontal rule
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
+      flushList()
+      htmlParts.push('<hr>')
+      continue
+    }
+    
+    // Headings
+    if (line.startsWith('# ')) {
+      flushList()
+      htmlParts.push(`<h1>${processInline(line.substring(2))}</h1>`)
+    } else if (line.startsWith('## ')) {
+      flushList()
+      htmlParts.push(`<h2>${processInline(line.substring(3))}</h2>`)
+    } else if (line.startsWith('### ')) {
+      flushList()
+      htmlParts.push(`<h3>${processInline(line.substring(4))}</h3>`)
+    } else if (line.startsWith('#### ')) {
+      flushList()
+      htmlParts.push(`<h4>${processInline(line.substring(5))}</h4>`)
+    }
+    // List items
+    else if (line.startsWith('- ') || line.startsWith('* ')) {
+      if (!inList || listType !== 'ul') {
+        flushList()
+        inList = true
+        listType = 'ul'
+      }
+      listItems.push(processInline(line.substring(2)))
+    } else if (/^\d+\.\s/.test(line)) {
+      if (!inList || listType !== 'ol') {
+        flushList()
+        inList = true
+        listType = 'ol'
+      }
+      listItems.push(processInline(line.replace(/^\d+\.\s/, '')))
+    }
+    // Blockquote
+    else if (line.startsWith('> ')) {
+      flushList()
+      htmlParts.push(`<blockquote>${processInline(line.substring(2))}</blockquote>`)
+    }
+    // Empty line
+    else if (line.trim() === '') {
+      flushList()
+    }
+    // Regular paragraph
+    else {
+      flushList()
+      htmlParts.push(`<p>${processInline(line)}</p>`)
+    }
+  }
+  
+  flushList()
+  
+  if (inCodeBlock && codeContent.length > 0) {
+    htmlParts.push(`<pre><code>${codeContent.join('\n')}</code></pre>`)
+  }
+  
+  return htmlParts.join('\n')
+}
+
+// Escape HTML entities
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 // Save markdown file
@@ -653,67 +784,4 @@ export async function createFile(
     console.error('Failed to create file:', error)
     return null
   }
-}
-
-// Generate printable HTML
-function generatePrintableHtml(title: string, markdown: string): string {
-  // Simple markdown to HTML conversion for printing
-  const html = markdown
-    // Headers
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    // Bold
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    // Italic
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Code blocks
-    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-    // Inline code
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-    // Lists
-    .replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>')
-    // Paragraphs
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/\n/g, '<br>')
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>${title}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      max-width: 800px;
-      margin: 40px auto;
-      padding: 20px;
-      line-height: 1.6;
-      color: #333;
-    }
-    h1, h2, h3 { margin-top: 1.5em; margin-bottom: 0.5em; }
-    h1 { font-size: 2em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }
-    h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
-    h3 { font-size: 1.25em; }
-    code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-    pre { background: #f4f4f4; padding: 16px; border-radius: 8px; overflow-x: auto; }
-    pre code { background: none; padding: 0; }
-    a { color: #667eea; text-decoration: none; }
-    li { margin: 0.5em 0; }
-    blockquote { border-left: 4px solid #667eea; padding-left: 1em; margin-left: 0; color: #666; }
-    @media print {
-      body { margin: 0; padding: 20px; }
-      a { color: inherit; }
-    }
-  </style>
-</head>
-<body>
-  <h1>${title}</h1>
-  <p>${html}</p>
-</body>
-</html>
-  `
 }
