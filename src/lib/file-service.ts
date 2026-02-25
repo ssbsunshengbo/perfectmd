@@ -242,20 +242,21 @@ async function importMarkdownFileTauri(): Promise<{ content: string; name: strin
 export async function exportToPdf(title: string, content: string): Promise<boolean> {
   try {
     // Generate printable HTML directly from HTML content (no Markdown conversion)
-    // This preserves all formatting and prevents encoding issues
     const printHtml = generatePrintableHtmlFromHtml(title, content)
     
-    // For Tauri desktop app, use a different approach
-    // Create a hidden iframe for more reliable printing in desktop environment
+    // Create a hidden iframe for printing
     const printFrame = document.createElement('iframe')
-    printFrame.style.position = 'fixed'
-    printFrame.style.left = '0'
-    printFrame.style.top = '0'
-    printFrame.style.width = '100%'
-    printFrame.style.height = '100%'
-    printFrame.style.border = 'none'
-    printFrame.style.zIndex = '9999'
-    printFrame.style.background = 'white'
+    printFrame.id = 'perfectmd-print-frame'
+    printFrame.style.cssText = `
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 0;
+      height: 0;
+      border: none;
+      pointer-events: none;
+      opacity: 0;
+    `
     
     document.body.appendChild(printFrame)
     
@@ -266,53 +267,28 @@ export async function exportToPdf(title: string, content: string): Promise<boole
       return false
     }
     
-    // Write content with explicit UTF-8 encoding
-    printDoc.open('text/html', 'replace')
+    // Write HTML content
+    printDoc.open()
     printDoc.write(printHtml)
     printDoc.close()
     
-    // Wait for fonts and content to load then print
-    return new Promise((resolve) => {
-      const doPrint = () => {
-        try {
-          // Focus and print
-          printFrame.contentWindow?.focus()
-          printFrame.contentWindow?.print()
-          
-          // Clean up after a delay to allow print dialog to open
-          setTimeout(() => {
-            try {
-              document.body.removeChild(printFrame)
-            } catch (e) {
-              console.warn('Failed to remove print frame:', e)
-            }
-          }, 500)
-          
-          resolve(true)
-        } catch (e) {
-          console.error('Print failed:', e)
-          try {
-            document.body.removeChild(printFrame)
-          } catch (err) {
-            console.warn('Failed to remove print frame:', err)
-          }
-          resolve(false)
-        }
+    // Small delay to ensure content is rendered
+    await new Promise(resolve => setTimeout(resolve, 300))
+    
+    // Trigger print
+    printFrame.contentWindow?.focus()
+    printFrame.contentWindow?.print()
+    
+    // Clean up iframe after a reasonable delay
+    // This gives the print dialog time to process
+    setTimeout(() => {
+      const frame = document.getElementById('perfectmd-print-frame')
+      if (frame && frame.parentNode) {
+        frame.parentNode.removeChild(frame)
       }
-      
-      // Wait for iframe to fully load including fonts
-      printFrame.onload = () => {
-        // Give extra time for Google Fonts to load
-        setTimeout(doPrint, 800)
-      }
-      
-      // Fallback if onload doesn't fire
-      setTimeout(() => {
-        if (printFrame.parentNode) {
-          doPrint()
-        }
-      }, 2000)
-    })
+    }, 10000) // 10 seconds should be enough for user to interact
+    
+    return true
   } catch (error) {
     console.error('Failed to export PDF:', error)
     throw error
