@@ -241,21 +241,21 @@ async function importMarkdownFileTauri(): Promise<{ content: string; name: strin
 // Export to PDF - uses system print dialog
 export async function exportToPdf(title: string, content: string): Promise<boolean> {
   try {
-    // Convert HTML content to Markdown
-    const markdownContent = htmlToMarkdown(content)
+    // Generate printable HTML directly from HTML content (no Markdown conversion)
+    // This preserves all formatting and prevents encoding issues
+    const printHtml = generatePrintableHtmlFromHtml(title, content)
     
-    // Generate printable HTML with proper styling
-    const printHtml = generatePrintableHtml(title, markdownContent)
-    
-    // Create a hidden iframe for printing
+    // For Tauri desktop app, use a different approach
+    // Create a hidden iframe for more reliable printing in desktop environment
     const printFrame = document.createElement('iframe')
     printFrame.style.position = 'fixed'
-    printFrame.style.right = '0'
-    printFrame.style.bottom = '0'
-    printFrame.style.width = '0'
-    printFrame.style.height = '0'
+    printFrame.style.left = '0'
+    printFrame.style.top = '0'
+    printFrame.style.width = '100%'
+    printFrame.style.height = '100%'
     printFrame.style.border = 'none'
-    printFrame.style.opacity = '0'
+    printFrame.style.zIndex = '9999'
+    printFrame.style.background = 'white'
     
     document.body.appendChild(printFrame)
     
@@ -266,37 +266,44 @@ export async function exportToPdf(title: string, content: string): Promise<boole
       return false
     }
     
-    printDoc.open()
+    // Write content with explicit UTF-8 encoding
+    printDoc.open('text/html', 'replace')
     printDoc.write(printHtml)
     printDoc.close()
     
-    // Wait for content to load then print
+    // Wait for fonts and content to load then print
     return new Promise((resolve) => {
       const doPrint = () => {
         try {
+          // Focus and print
           printFrame.contentWindow?.focus()
           printFrame.contentWindow?.print()
           
-          // Clean up after print dialog opens
+          // Clean up after a delay to allow print dialog to open
           setTimeout(() => {
             try {
               document.body.removeChild(printFrame)
-            } catch (e) {}
-          }, 1000)
+            } catch (e) {
+              console.warn('Failed to remove print frame:', e)
+            }
+          }, 500)
           
           resolve(true)
         } catch (e) {
           console.error('Print failed:', e)
           try {
             document.body.removeChild(printFrame)
-          } catch (err) {}
+          } catch (err) {
+            console.warn('Failed to remove print frame:', err)
+          }
           resolve(false)
         }
       }
       
-      // Wait for iframe to load
+      // Wait for iframe to fully load including fonts
       printFrame.onload = () => {
-        setTimeout(doPrint, 100)
+        // Give extra time for Google Fonts to load
+        setTimeout(doPrint, 800)
       }
       
       // Fallback if onload doesn't fire
@@ -304,7 +311,7 @@ export async function exportToPdf(title: string, content: string): Promise<boole
         if (printFrame.parentNode) {
           doPrint()
         }
-      }, 500)
+      }, 2000)
     })
   } catch (error) {
     console.error('Failed to export PDF:', error)
@@ -312,7 +319,231 @@ export async function exportToPdf(title: string, content: string): Promise<boole
   }
 }
 
-// Generate printable HTML with proper Chinese font support
+// Generate printable HTML directly from HTML content
+// This preserves all formatting and prevents encoding issues with Chinese characters
+function generatePrintableHtmlFromHtml(title: string, htmlContent: string): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    /* Use system fonts first for reliability in desktop apps */
+    @font-face {
+      font-family: 'System Chinese';
+      src: local('PingFang SC'), local('Microsoft YaHei'), local('Hiragino Sans GB'), local('WenQuanYi Micro Hei'), local('Noto Sans SC'), local('SimHei');
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    html, body {
+      font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", "Noto Sans SC", "SimHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 12pt;
+      line-height: 1.8;
+      color: #333;
+      background: white;
+    }
+    
+    body {
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 20mm;
+    }
+    
+    .document-title {
+      font-size: 24pt;
+      font-weight: bold;
+      margin-bottom: 20pt;
+      color: #111;
+      padding-bottom: 10pt;
+      border-bottom: 2px solid #333;
+    }
+    
+    h1 {
+      font-size: 24pt;
+      font-weight: bold;
+      margin-bottom: 20pt;
+      color: #111;
+      padding-bottom: 10pt;
+      border-bottom: 2px solid #333;
+    }
+    
+    h2 {
+      font-size: 18pt;
+      font-weight: bold;
+      margin-top: 20pt;
+      margin-bottom: 10pt;
+      color: #222;
+    }
+    
+    h3 {
+      font-size: 14pt;
+      font-weight: bold;
+      margin-top: 15pt;
+      margin-bottom: 8pt;
+      color: #333;
+    }
+    
+    h4, h5, h6 {
+      font-weight: bold;
+      margin-top: 12pt;
+      margin-bottom: 6pt;
+    }
+    
+    p {
+      margin: 10pt 0;
+      text-align: justify;
+    }
+    
+    ul, ol {
+      margin: 10pt 0;
+      padding-left: 20pt;
+    }
+    
+    li {
+      margin: 5pt 0;
+    }
+    
+    blockquote {
+      margin: 15pt 0;
+      padding: 10pt 15pt;
+      border-left: 4px solid #666;
+      background: #f5f5f5;
+      color: #555;
+    }
+    
+    code, .inline-code {
+      font-family: "SF Mono", "Fira Code", Consolas, Monaco, "Courier New", "SimHei", monospace;
+      background: #f0f0f0;
+      padding: 2pt 6pt;
+      border-radius: 3pt;
+      font-size: 10pt;
+    }
+    
+    pre {
+      margin: 15pt 0;
+      padding: 15pt;
+      background: #2d2d2d;
+      color: #f8f8f2;
+      border-radius: 5pt;
+      overflow-x: auto;
+      font-family: "SF Mono", "Fira Code", Consolas, Monaco, "Courier New", "SimHei", monospace;
+      font-size: 10pt;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+    }
+    
+    hr {
+      border: none;
+      border-top: 1px solid #ccc;
+      margin: 20pt 0;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15pt 0;
+    }
+    
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8pt;
+      text-align: left;
+    }
+    
+    th {
+      background: #f5f5f5;
+      font-weight: bold;
+    }
+    
+    a {
+      color: #0066cc;
+      text-decoration: none;
+    }
+    
+    strong, b {
+      font-weight: bold;
+    }
+    
+    em, i {
+      font-style: italic;
+    }
+    
+    s, del, strike {
+      text-decoration: line-through;
+    }
+    
+    u {
+      text-decoration: underline;
+    }
+    
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+    
+    .math-inline, .math-block {
+      font-family: "Times New Roman", serif;
+      font-style: italic;
+    }
+    
+    /* Preserve inline styles from editor */
+    span[style*="color"] {
+      /* Color styling preserved */
+    }
+    
+    span[style*="background"] {
+      /* Background styling preserved */
+    }
+    
+    .font-size-span {
+      /* Font size styling preserved */
+    }
+    
+    @media print {
+      html, body {
+        font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", "Noto Sans SC", "SimHei", sans-serif;
+      }
+      
+      body {
+        padding: 0;
+      }
+      
+      @page {
+        margin: 20mm;
+        size: A4 portrait;
+      }
+      
+      /* Ensure colors and fonts are preserved */
+      * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1 class="document-title">${escapeHtml(title)}</h1>
+  ${htmlContent}
+</body>
+</html>`
+}
+
+// Generate printable HTML with proper Chinese font support (legacy - uses markdown)
 function generatePrintableHtml(title: string, markdown: string): string {
   // Convert markdown to HTML with proper formatting
   const htmlContent = markdownToHtmlForPrint(markdown)
