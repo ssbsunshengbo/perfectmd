@@ -2,9 +2,12 @@
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
   "description": "Default capability for the app",
-  "windows": ["main"],
+  "windows": ["main", "print-*"],
   "permissions": [
     "core:default",
+    "core:webview:allow-print",
+    "core:window:allow-create",
+    "core:window:allow-close",
     "dialog:default",
     "dialog:allow-save",
     "dialog:allow-open",

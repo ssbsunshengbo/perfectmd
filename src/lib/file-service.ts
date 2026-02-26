@@ -256,14 +256,9 @@ async function exportToPdfWeb(title: string, content: string): Promise<boolean> 
       return false
     }
 
-    const html = generatePrintableHtml(title, content)
+    const html = generatePrintableHtmlWithAutoPrint(title, content)
     printWindow.document.write(html)
     printWindow.document.close()
-
-    // Wait for content to load then print
-    setTimeout(() => {
-      printWindow.print()
-    }, 500)
 
     return true
   } catch (error) {
@@ -274,33 +269,117 @@ async function exportToPdfWeb(title: string, content: string): Promise<boolean> 
 
 async function exportToPdfTauri(title: string, content: string): Promise<boolean> {
   try {
-    const { save } = await import('@tauri-apps/plugin-dialog')
-    const { writeTextFile } = await import('@tauri-apps/plugin-fs')
+    // For Tauri, create a new webview window and print from there
+    const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
     
-    // Let user choose where to save
-    const filePath = await save({
-      defaultPath: `${title}.html`,
-      filters: [
-        { name: 'HTML Document', extensions: ['html'] }
-      ],
+    // Generate HTML with auto-print script
+    const html = generatePrintableHtmlWithAutoPrint(title, content)
+    
+    // Create a unique label for the print window
+    const label = `print-${Date.now()}`
+    
+    // Create a new webview window for printing
+    const printWindow = new WebviewWindow(label, {
+      url: 'data:text/html;charset=utf-8,' + encodeURIComponent(html),
+      title: 'Print Preview - ' + title,
+      width: 800,
+      height: 600,
+      center: true,
+      resizable: true,
+      decorations: true,
+      visible: true,
     })
-
-    if (!filePath) {
-      return false // User cancelled
-    }
-
-    // Convert content to Markdown first, then to printable HTML
-    const markdownContent = htmlToMarkdown(content)
-    const html = generatePrintableHtml(title, markdownContent)
     
-    // Save the HTML file
-    await writeTextFile(filePath, html)
+    // Listen for errors
+    printWindow.once('tauri://error', (e) => {
+      console.error('Print window error:', e)
+    })
     
     return true
   } catch (error) {
     console.error('Failed to export:', error)
     return false
   }
+}
+
+// Generate printable HTML with auto-print functionality
+function generatePrintableHtmlWithAutoPrint(title: string, htmlContent: string): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    html, body {
+      font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", "Noto Sans SC", "SimHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 12pt;
+      line-height: 1.8;
+      color: #333;
+      background: white;
+    }
+    
+    body {
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 20mm;
+    }
+    
+    .document-title {
+      font-size: 24pt;
+      font-weight: bold;
+      margin-bottom: 20pt;
+      color: #111;
+      padding-bottom: 10pt;
+      border-bottom: 2px solid #333;
+    }
+    
+    h1 { font-size: 24pt; font-weight: bold; margin-bottom: 20pt; color: #111; }
+    h2 { font-size: 18pt; font-weight: bold; margin-top: 20pt; margin-bottom: 10pt; color: #222; }
+    h3 { font-size: 14pt; font-weight: bold; margin-top: 15pt; margin-bottom: 8pt; color: #333; }
+    h4, h5, h6 { font-weight: bold; margin-top: 12pt; margin-bottom: 6pt; }
+    p { margin: 10pt 0; text-align: justify; }
+    ul, ol { margin: 10pt 0; padding-left: 20pt; }
+    li { margin: 5pt 0; }
+    blockquote { margin: 15pt 0; padding: 10pt 15pt; border-left: 4px solid #666; background: #f5f5f5; color: #555; }
+    code { font-family: Consolas, Monaco, monospace; background: #f0f0f0; padding: 2pt 6pt; border-radius: 3pt; font-size: 10pt; }
+    pre { margin: 15pt 0; padding: 15pt; background: #2d2d2d; color: #f8f8f2; border-radius: 5pt; overflow-x: auto; font-family: Consolas, Monaco, monospace; font-size: 10pt; white-space: pre-wrap; }
+    pre code { background: transparent; padding: 0; color: inherit; }
+    hr { border: none; border-top: 1px solid #ccc; margin: 20pt 0; }
+    table { width: 100%; border-collapse: collapse; margin: 15pt 0; }
+    th, td { border: 1px solid #ccc; padding: 8pt; text-align: left; }
+    th { background: #f5f5f5; font-weight: bold; }
+    a { color: #0066cc; text-decoration: none; }
+    strong, b { font-weight: bold; }
+    em, i { font-style: italic; }
+    img { max-width: 100%; height: auto; }
+    
+    @media print {
+      body { padding: 0; }
+      @page { margin: 20mm; size: A4 portrait; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <h1 class="document-title">${escapeHtml(title)}</h1>
+  ${htmlContent}
+  <script>
+    // Auto-trigger print dialog after page loads
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    };
+  </script>
+</body>
+</html>`
 }
 
 // Save markdown file
