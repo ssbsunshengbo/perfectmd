@@ -244,33 +244,45 @@ export async function exportToPdf(title: string, content: string): Promise<boole
     // Import html2pdf.js
     const html2pdf = (await import('html2pdf.js')).default
     
-    // Create a container for the PDF content
+    // Clean up HTML content - remove unsupported CSS color functions
+    const cleanedContent = cleanHtmlForPdf(content)
+    
+    // Create an isolated container for the PDF content
     const container = document.createElement('div')
-    container.style.cssText = `
-      font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", sans-serif;
+    // Set all styles explicitly with hex colors only
+    container.setAttribute('style', `
+      all: initial;
+      font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", SimHei, sans-serif;
       font-size: 12pt;
       line-height: 1.8;
-      color: #333;
+      color: #333333;
       padding: 20mm;
       max-width: 210mm;
-      background: white;
-    `
+      background-color: #ffffff;
+      display: block;
+    `)
     
     // Add title
     const titleEl = document.createElement('h1')
     titleEl.textContent = title
-    titleEl.style.cssText = `
+    titleEl.setAttribute('style', `
+      all: initial;
       font-size: 24pt;
       font-weight: bold;
       margin-bottom: 20pt;
       padding-bottom: 10pt;
-      border-bottom: 2px solid #333;
-    `
+      border-bottom: 2px solid #333333;
+      color: #111111;
+      display: block;
+      font-family: inherit;
+    `)
     container.appendChild(titleEl)
     
-    // Add content (HTML)
+    // Add content (cleaned HTML)
     const contentEl = document.createElement('div')
-    contentEl.innerHTML = content
+    contentEl.innerHTML = cleanedContent
+    // Clean up all element styles in content
+    cleanAllElementStyles(contentEl)
     container.appendChild(contentEl)
     
     // PDF options
@@ -282,7 +294,34 @@ export async function exportToPdf(title: string, content: string): Promise<boole
         scale: 2,
         useCORS: true,
         logging: false,
-        letterRendering: true
+        letterRendering: true,
+        // Important: don't use window's computed styles
+        windowWidth: 800,
+        onclone: (clonedDoc: Document) => {
+          // Process the cloned document to remove problematic styles
+          const allElements = clonedDoc.querySelectorAll('*')
+          allElements.forEach((el) => {
+            const htmlEl = el as HTMLElement
+            // Remove any computed styles that use oklch/lab
+            const computedStyle = clonedDoc.defaultView?.getComputedStyle(htmlEl)
+            if (computedStyle) {
+              const color = computedStyle.color
+              const bgColor = computedStyle.backgroundColor
+              // If color contains problematic function, reset it
+              if (color && (color.includes('oklch') || color.includes('lab') || color.includes('lch'))) {
+                htmlEl.style.color = '#333333'
+              }
+              if (bgColor && (bgColor.includes('oklch') || bgColor.includes('lab') || bgColor.includes('lch'))) {
+                htmlEl.style.backgroundColor = '#ffffff'
+              }
+            }
+            // Clean style attribute
+            const style = htmlEl.getAttribute('style')
+            if (style && (style.includes('oklch') || style.includes('lab') || style.includes('lch') || style.includes('color-mix') || style.includes('var('))) {
+              htmlEl.setAttribute('style', cleanStyleAttribute(style))
+            }
+          })
+        }
       },
       jsPDF: { 
         unit: 'mm', 
@@ -299,6 +338,68 @@ export async function exportToPdf(title: string, content: string): Promise<boole
     console.error('Failed to export PDF:', error)
     throw error
   }
+}
+
+// Clean style attribute from problematic color functions
+function cleanStyleAttribute(style: string): string {
+  return style
+    .replace(/oklch\([^)]*\)/gi, '#333333')
+    .replace(/oklab\([^)]*\)/gi, '#333333')
+    .replace(/lab\([^)]*\)/gi, '#333333')
+    .replace(/lch\([^)]*\)/gi, '#333333')
+    .replace(/color\([^)]*\)/gi, '#333333')
+    .replace(/color-mix\([^)]*\)/gi, '#333333')
+    .replace(/var\([^)]*\)/gi, '#333333')
+}
+
+// Clean all element styles recursively
+function cleanAllElementStyles(element: HTMLElement): void {
+  // Clean current element
+  const style = element.getAttribute('style')
+  if (style) {
+    element.setAttribute('style', cleanStyleAttribute(style))
+  }
+  
+  // Remove classes that might apply problematic CSS
+  element.removeAttribute('class')
+  
+  // Clean children
+  const children = element.children
+  for (let i = 0; i < children.length; i++) {
+    cleanAllElementStyles(children[i] as HTMLElement)
+  }
+}
+
+// Clean HTML content for PDF export
+function cleanHtmlForPdf(html: string): string {
+  // Remove all problematic color functions
+  return html
+    .replace(/oklch\([^)]*\)/gi, '#333333')
+    .replace(/oklab\([^)]*\)/gi, '#333333')
+    .replace(/lab\([^)]*\)/gi, '#333333')
+    .replace(/lch\([^)]*\)/gi, '#333333')
+    .replace(/color\([^)]*\)/gi, '#333333')
+    .replace(/color-mix\([^)]*\)/gi, '#333333')
+    .replace(/var\([^)]*\)/gi, '#333333')
+}
+
+// Cleanup styles in DOM elements (legacy - kept for reference)
+function cleanupStyles(container: HTMLElement): void {
+  // Get all elements with style attribute
+  const elements = container.querySelectorAll('[style]')
+  
+  elements.forEach((el) => {
+    const htmlEl = el as HTMLElement
+    const style = htmlEl.getAttribute('style') || ''
+    htmlEl.setAttribute('style', cleanStyleAttribute(style))
+  })
+  
+  // Remove class attributes that might apply problematic styles
+  const classElements = container.querySelectorAll('[class]')
+  classElements.forEach((el) => {
+    const htmlEl = el as HTMLElement
+    htmlEl.removeAttribute('class')
+  })
 }
 
 // Save markdown file
