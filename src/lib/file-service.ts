@@ -311,12 +311,19 @@ async function exportToPdfTauri(title: string, content: string): Promise<boolean
 
 // Generate printable HTML with auto-print functionality
 function generatePrintableHtmlWithAutoPrint(title: string, htmlContent: string): string {
+  const escapedTitle = title
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+  
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)}</title>
+  <title>${escapedTitle}</title>
   <style>
     * {
       margin: 0;
@@ -375,7 +382,7 @@ function generatePrintableHtmlWithAutoPrint(title: string, htmlContent: string):
   </style>
 </head>
 <body>
-  <h1 class="document-title">${escapeHtml(title)}</h1>
+  <h1 class="document-title">${escapedTitle}</h1>
   ${htmlContent}
   <script>
     // Auto-trigger print dialog after page loads
