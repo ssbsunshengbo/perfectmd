@@ -238,162 +238,67 @@ async function importMarkdownFileTauri(): Promise<{ content: string; name: strin
   }
 }
 
-// Export to PDF
+// Export to PDF - directly generate PDF file
 export async function exportToPdf(title: string, content: string): Promise<boolean> {
-  console.log('exportToPdf called, isTauri:', isTauri())
-  if (isTauri()) {
-    return exportToPdfTauri(title, content)
-  } else {
-    return exportToPdfWeb(title, content)
-  }
-}
-
-async function exportToPdfWeb(title: string, content: string): Promise<boolean> {
   try {
-    // Create a printable HTML version
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) {
-      alert('Please allow popups to export PDF')
-      return false
-    }
-
-    const html = generatePrintableHtmlWithAutoPrint(title, content)
-    printWindow.document.write(html)
-    printWindow.document.close()
-
-    return true
-  } catch (error) {
-    console.error('Failed to export PDF:', error)
-    return false
-  }
-}
-
-async function exportToPdfTauri(title: string, content: string): Promise<boolean> {
-  try {
-    console.log('exportToPdfTauri called')
+    // Import html2pdf.js
+    const html2pdf = (await import('html2pdf.js')).default
     
-    // For Tauri, create a new webview window and print from there
-    const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
-    console.log('WebviewWindow imported')
-    
-    // Generate HTML with auto-print script
-    const html = generatePrintableHtmlWithAutoPrint(title, content)
-    console.log('HTML generated, length:', html.length)
-    
-    // Create a unique label for the print window
-    const label = `print-${Date.now()}`
-    console.log('Creating window with label:', label)
-    
-    // Create a new webview window for printing
-    const printWindow = new WebviewWindow(label, {
-      url: 'data:text/html;charset=utf-8,' + encodeURIComponent(html),
-      title: 'Print Preview - ' + title,
-      width: 800,
-      height: 600,
-      center: true,
-      resizable: true,
-      decorations: true,
-      visible: true,
-    })
-    console.log('WebviewWindow created:', printWindow)
-    
-    // Listen for errors
-    printWindow.once('tauri://error', (e) => {
-      console.error('Print window error:', e)
-    })
-    
-    return true
-  } catch (error) {
-    console.error('Failed to export:', error)
-    throw error // Re-throw to see the actual error
-  }
-}
-
-// Generate printable HTML with auto-print functionality
-function generatePrintableHtmlWithAutoPrint(title: string, htmlContent: string): string {
-  const escapedTitle = title
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
-  
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapedTitle}</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    html, body {
-      font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", "Noto Sans SC", "SimHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    // Create a container for the PDF content
+    const container = document.createElement('div')
+    container.style.cssText = `
+      font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", sans-serif;
       font-size: 12pt;
       line-height: 1.8;
       color: #333;
-      background: white;
-    }
-    
-    body {
-      max-width: 210mm;
-      margin: 0 auto;
       padding: 20mm;
-    }
+      max-width: 210mm;
+      background: white;
+    `
     
-    .document-title {
+    // Add title
+    const titleEl = document.createElement('h1')
+    titleEl.textContent = title
+    titleEl.style.cssText = `
       font-size: 24pt;
       font-weight: bold;
       margin-bottom: 20pt;
-      color: #111;
       padding-bottom: 10pt;
       border-bottom: 2px solid #333;
+    `
+    container.appendChild(titleEl)
+    
+    // Add content (HTML)
+    const contentEl = document.createElement('div')
+    contentEl.innerHTML = content
+    container.appendChild(contentEl)
+    
+    // PDF options
+    const opt = {
+      margin: [20, 20, 20, 20], // top, left, bottom, right in mm
+      filename: `${title}.pdf`,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { 
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        letterRendering: true
+      },
+      jsPDF: { 
+        unit: 'mm', 
+        format: 'a4', 
+        orientation: 'portrait' 
+      }
     }
     
-    h1 { font-size: 24pt; font-weight: bold; margin-bottom: 20pt; color: #111; }
-    h2 { font-size: 18pt; font-weight: bold; margin-top: 20pt; margin-bottom: 10pt; color: #222; }
-    h3 { font-size: 14pt; font-weight: bold; margin-top: 15pt; margin-bottom: 8pt; color: #333; }
-    h4, h5, h6 { font-weight: bold; margin-top: 12pt; margin-bottom: 6pt; }
-    p { margin: 10pt 0; text-align: justify; }
-    ul, ol { margin: 10pt 0; padding-left: 20pt; }
-    li { margin: 5pt 0; }
-    blockquote { margin: 15pt 0; padding: 10pt 15pt; border-left: 4px solid #666; background: #f5f5f5; color: #555; }
-    code { font-family: Consolas, Monaco, monospace; background: #f0f0f0; padding: 2pt 6pt; border-radius: 3pt; font-size: 10pt; }
-    pre { margin: 15pt 0; padding: 15pt; background: #2d2d2d; color: #f8f8f2; border-radius: 5pt; overflow-x: auto; font-family: Consolas, Monaco, monospace; font-size: 10pt; white-space: pre-wrap; }
-    pre code { background: transparent; padding: 0; color: inherit; }
-    hr { border: none; border-top: 1px solid #ccc; margin: 20pt 0; }
-    table { width: 100%; border-collapse: collapse; margin: 15pt 0; }
-    th, td { border: 1px solid #ccc; padding: 8pt; text-align: left; }
-    th { background: #f5f5f5; font-weight: bold; }
-    a { color: #0066cc; text-decoration: none; }
-    strong, b { font-weight: bold; }
-    em, i { font-style: italic; }
-    img { max-width: 100%; height: auto; }
+    // Generate and save PDF
+    await html2pdf().set(opt).from(container).save()
     
-    @media print {
-      body { padding: 0; }
-      @page { margin: 20mm; size: A4 portrait; }
-      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    }
-  </style>
-</head>
-<body>
-  <h1 class="document-title">${escapedTitle}</h1>
-  ${htmlContent}
-  <script>
-    // Auto-trigger print dialog after page loads
-    window.onload = function() {
-      setTimeout(function() {
-        window.print();
-      }, 500);
-    };
-  </script>
-</body>
-</html>`
+    return true
+  } catch (error) {
+    console.error('Failed to export PDF:', error)
+    throw error
+  }
 }
 
 // Save markdown file
