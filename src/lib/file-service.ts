@@ -240,6 +240,7 @@ async function importMarkdownFileTauri(): Promise<{ content: string; name: strin
 
 // Export to PDF
 export async function exportToPdf(title: string, content: string): Promise<boolean> {
+  console.log('exportToPdf called, isTauri:', isTauri())
   if (isTauri()) {
     return exportToPdfTauri(title, content)
   } else {
@@ -269,14 +270,19 @@ async function exportToPdfWeb(title: string, content: string): Promise<boolean> 
 
 async function exportToPdfTauri(title: string, content: string): Promise<boolean> {
   try {
+    console.log('exportToPdfTauri called')
+    
     // For Tauri, create a new webview window and print from there
     const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
+    console.log('WebviewWindow imported')
     
     // Generate HTML with auto-print script
     const html = generatePrintableHtmlWithAutoPrint(title, content)
+    console.log('HTML generated, length:', html.length)
     
     // Create a unique label for the print window
     const label = `print-${Date.now()}`
+    console.log('Creating window with label:', label)
     
     // Create a new webview window for printing
     const printWindow = new WebviewWindow(label, {
@@ -289,6 +295,7 @@ async function exportToPdfTauri(title: string, content: string): Promise<boolean
       decorations: true,
       visible: true,
     })
+    console.log('WebviewWindow created:', printWindow)
     
     // Listen for errors
     printWindow.once('tauri://error', (e) => {
@@ -298,7 +305,7 @@ async function exportToPdfTauri(title: string, content: string): Promise<boolean
     return true
   } catch (error) {
     console.error('Failed to export:', error)
-    return false
+    throw error // Re-throw to see the actual error
   }
 }
 

@@ -99,13 +99,18 @@ export function Header() {
   }
 
   const handleExportPdf = async () => {
-    const result = await exportAsPdf()
-    if (result) {
-      toast.success('Document exported! The file will open in your browser where you can print to PDF.', {
-        duration: 5000
-      })
-    } else {
-      toast.error('Failed to export document')
+    try {
+      const result = await exportAsPdf()
+      if (result) {
+        toast.success('打印窗口已打开，请在打印对话框中选择"另存为PDF"保存文档。', {
+          duration: 5000
+        })
+      } else {
+        toast.error('导出PDF失败，请查看控制台获取详细信息')
+      }
+    } catch (error) {
+      console.error('Export PDF error:', error)
+      toast.error(`导出PDF失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
   }
 
