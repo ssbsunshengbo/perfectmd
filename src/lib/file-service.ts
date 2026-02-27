@@ -244,84 +244,78 @@ export async function exportToPdf(title: string, content: string): Promise<boole
     // Import html2pdf.js
     const html2pdf = (await import('html2pdf.js')).default
     
-    // Clean up HTML content - remove unsupported CSS color functions
-    const cleanedContent = cleanHtmlForPdf(content)
+    // Create an iframe to isolate from page styles
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:800px;height:600px;'
+    document.body.appendChild(iframe)
     
-    // Create an isolated container for the PDF content
-    const container = document.createElement('div')
-    // Set all styles explicitly with hex colors only
-    container.setAttribute('style', `
-      all: initial;
-      font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", SimHei, sans-serif;
-      font-size: 12pt;
-      line-height: 1.8;
-      color: #333333;
-      padding: 20mm;
-      max-width: 210mm;
-      background-color: #ffffff;
-      display: block;
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!iframeDoc) {
+      document.body.removeChild(iframe)
+      throw new Error('Failed to create iframe')
+    }
+    
+    // Write clean HTML to iframe
+    iframeDoc.open()
+    iframeDoc.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: "PingFang SC", "Microsoft YaHei", SimHei, sans-serif;
+            font-size: 12pt;
+            line-height: 1.8;
+            color: #333333;
+            background: #ffffff;
+            padding: 20mm;
+          }
+          h1 { font-size: 24pt; font-weight: bold; margin-bottom: 20pt; padding-bottom: 10pt; border-bottom: 2px solid #333; }
+          h2 { font-size: 18pt; font-weight: bold; margin-top: 20pt; margin-bottom: 10pt; }
+          h3 { font-size: 14pt; font-weight: bold; margin-top: 15pt; margin-bottom: 8pt; }
+          p { margin: 10pt 0; }
+          ul, ol { margin: 10pt 0; padding-left: 20pt; }
+          li { margin: 5pt 0; }
+          blockquote { margin: 15pt 0; padding: 10pt 15pt; border-left: 4px solid #666; background: #f5f5f5; }
+          code { font-family: Consolas, Monaco, monospace; background: #f0f0f0; padding: 2pt 6pt; border-radius: 3pt; font-size: 10pt; }
+          pre { margin: 15pt 0; padding: 15pt; background: #2d2d2d; color: #f8f8f2; border-radius: 5pt; overflow-x: auto; }
+          pre code { background: transparent; color: inherit; }
+          table { width: 100%; border-collapse: collapse; margin: 15pt 0; }
+          th, td { border: 1px solid #ccc; padding: 8pt; text-align: left; }
+          th { background: #f5f5f5; font-weight: bold; }
+          a { color: #0066cc; }
+          strong, b { font-weight: bold; }
+          em, i { font-style: italic; }
+          hr { border: none; border-top: 1px solid #ccc; margin: 20pt 0; }
+          img { max-width: 100%; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtmlText(title)}</h1>
+        ${cleanHtmlForPdf(content)}
+      </body>
+      </html>
     `)
+    iframeDoc.close()
     
-    // Add title
-    const titleEl = document.createElement('h1')
-    titleEl.textContent = title
-    titleEl.setAttribute('style', `
-      all: initial;
-      font-size: 24pt;
-      font-weight: bold;
-      margin-bottom: 20pt;
-      padding-bottom: 10pt;
-      border-bottom: 2px solid #333333;
-      color: #111111;
-      display: block;
-      font-family: inherit;
-    `)
-    container.appendChild(titleEl)
+    // Wait for content to render
+    await new Promise(resolve => setTimeout(resolve, 300))
     
-    // Add content (cleaned HTML)
-    const contentEl = document.createElement('div')
-    contentEl.innerHTML = cleanedContent
-    // Clean up all element styles in content
-    cleanAllElementStyles(contentEl)
-    container.appendChild(contentEl)
+    // Get the body element from iframe
+    const element = iframeDoc.body
     
     // PDF options
     const opt = {
-      margin: [20, 20, 20, 20], // top, left, bottom, right in mm
+      margin: [20, 20, 20, 20],
       filename: `${title}.pdf`,
       image: { type: 'jpeg', quality: 0.95 },
       html2canvas: { 
         scale: 2,
         useCORS: true,
         logging: false,
-        letterRendering: true,
-        // Important: don't use window's computed styles
-        windowWidth: 800,
-        onclone: (clonedDoc: Document) => {
-          // Process the cloned document to remove problematic styles
-          const allElements = clonedDoc.querySelectorAll('*')
-          allElements.forEach((el) => {
-            const htmlEl = el as HTMLElement
-            // Remove any computed styles that use oklch/lab
-            const computedStyle = clonedDoc.defaultView?.getComputedStyle(htmlEl)
-            if (computedStyle) {
-              const color = computedStyle.color
-              const bgColor = computedStyle.backgroundColor
-              // If color contains problematic function, reset it
-              if (color && (color.includes('oklch') || color.includes('lab') || color.includes('lch'))) {
-                htmlEl.style.color = '#333333'
-              }
-              if (bgColor && (bgColor.includes('oklch') || bgColor.includes('lab') || bgColor.includes('lch'))) {
-                htmlEl.style.backgroundColor = '#ffffff'
-              }
-            }
-            // Clean style attribute
-            const style = htmlEl.getAttribute('style')
-            if (style && (style.includes('oklch') || style.includes('lab') || style.includes('lch') || style.includes('color-mix') || style.includes('var('))) {
-              htmlEl.setAttribute('style', cleanStyleAttribute(style))
-            }
-          })
-        }
+        windowWidth: 800
       },
       jsPDF: { 
         unit: 'mm', 
@@ -331,7 +325,10 @@ export async function exportToPdf(title: string, content: string): Promise<boole
     }
     
     // Generate and save PDF
-    await html2pdf().set(opt).from(container).save()
+    await html2pdf().set(opt).from(element).save()
+    
+    // Cleanup
+    document.body.removeChild(iframe)
     
     return true
   } catch (error) {
@@ -340,66 +337,37 @@ export async function exportToPdf(title: string, content: string): Promise<boole
   }
 }
 
-// Clean style attribute from problematic color functions
-function cleanStyleAttribute(style: string): string {
-  return style
-    .replace(/oklch\([^)]*\)/gi, '#333333')
-    .replace(/oklab\([^)]*\)/gi, '#333333')
-    .replace(/lab\([^)]*\)/gi, '#333333')
-    .replace(/lch\([^)]*\)/gi, '#333333')
-    .replace(/color\([^)]*\)/gi, '#333333')
-    .replace(/color-mix\([^)]*\)/gi, '#333333')
-    .replace(/var\([^)]*\)/gi, '#333333')
-}
-
-// Clean all element styles recursively
-function cleanAllElementStyles(element: HTMLElement): void {
-  // Clean current element
-  const style = element.getAttribute('style')
-  if (style) {
-    element.setAttribute('style', cleanStyleAttribute(style))
-  }
-  
-  // Remove classes that might apply problematic CSS
-  element.removeAttribute('class')
-  
-  // Clean children
-  const children = element.children
-  for (let i = 0; i < children.length; i++) {
-    cleanAllElementStyles(children[i] as HTMLElement)
-  }
+// Escape HTML text
+function escapeHtmlText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 // Clean HTML content for PDF export
 function cleanHtmlForPdf(html: string): string {
-  // Remove all problematic color functions
-  return html
-    .replace(/oklch\([^)]*\)/gi, '#333333')
-    .replace(/oklab\([^)]*\)/gi, '#333333')
-    .replace(/lab\([^)]*\)/gi, '#333333')
-    .replace(/lch\([^)]*\)/gi, '#333333')
-    .replace(/color\([^)]*\)/gi, '#333333')
-    .replace(/color-mix\([^)]*\)/gi, '#333333')
-    .replace(/var\([^)]*\)/gi, '#333333')
-}
-
-// Cleanup styles in DOM elements (legacy - kept for reference)
-function cleanupStyles(container: HTMLElement): void {
-  // Get all elements with style attribute
-  const elements = container.querySelectorAll('[style]')
-  
-  elements.forEach((el) => {
-    const htmlEl = el as HTMLElement
-    const style = htmlEl.getAttribute('style') || ''
-    htmlEl.setAttribute('style', cleanStyleAttribute(style))
+  // Remove style attributes that might contain problematic colors
+  let cleaned = html.replace(/\s*style\s*=\s*["'][^"']*["']/gi, (match) => {
+    // Only keep basic styles that are safe
+    const safeStyles = ['font-weight', 'font-style', 'text-decoration', 'text-align']
+    let result = ''
+    safeStyles.forEach(style => {
+      const regex = new RegExp(style + '\\s*:\\s*([^;]+)', 'i')
+      const m = match.match(regex)
+      if (m) {
+        result += `${style}:${m[1]};`
+      }
+    })
+    return result ? ` style="${result}"` : ''
   })
   
-  // Remove class attributes that might apply problematic styles
-  const classElements = container.querySelectorAll('[class]')
-  classElements.forEach((el) => {
-    const htmlEl = el as HTMLElement
-    htmlEl.removeAttribute('class')
-  })
+  // Remove class attributes (they might apply problematic CSS)
+  cleaned = cleaned.replace(/\s*class\s*=\s*["'][^"']*["']/gi, '')
+  
+  return cleaned
 }
 
 // Save markdown file
