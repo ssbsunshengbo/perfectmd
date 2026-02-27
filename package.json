@@ -32,6 +32,7 @@
     "highlight.js": "^11.11.1",
     "html-to-pdfmake": "^2.5.32",
     "html2pdf.js": "^0.14.0",
+    "jspdf": "^4.2.0",
     "katex": "^0.16.33",
     "lucide-react": "^0.525.0",
     "marked": "^17.0.3",

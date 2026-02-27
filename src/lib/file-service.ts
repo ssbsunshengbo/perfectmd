@@ -238,95 +238,107 @@ async function importMarkdownFileTauri(): Promise<{ content: string; name: strin
   }
 }
 
-// Export to PDF - using pdfmake (no html2canvas color issues)
+// Export to PDF - using jsPDF directly with simple HTML rendering
 export async function exportToPdf(title: string, content: string): Promise<boolean> {
   try {
-    // Dynamic imports
-    const pdfMake = (await import('pdfmake/build/pdfmake')).default
-    const pdfFonts = (await import('pdfmake/build/vfs_fonts')).default
-    const htmlToPdfmake = (await import('html-to-pdfmake')).default
+    // Use jsPDF directly - it's more reliable
+    const { jsPDF } = await import('jspdf')
     
-    // Set up fonts
-    pdfMake.vfs = pdfFonts.pdfMake.vfs
-    
-    // Clean HTML content
+    // Clean HTML content and extract text
     const cleanedHtml = cleanHtmlForPdf(content)
+    const textContent = extractTextFromHtml(cleanedHtml)
     
-    // Wrap with title
-    const fullHtml = `<h1>${escapeHtmlText(title)}</h1>${cleanedHtml}`
-    
-    // Convert HTML to pdfmake format
-    const pdfContent = htmlToPdfmake(fullHtml, {
-      tableAutoSize: true,
-      imagesByReference: false,
+    // Create PDF
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
     })
     
-    // Document definition
-    const docDefinition = {
-      content: pdfContent,
-      defaultStyle: {
-        font: 'Roboto',
-        fontSize: 12,
-        lineHeight: 1.5,
-      },
-      styles: {
-        header1: {
-          fontSize: 24,
-          bold: true,
-          marginBottom: 20,
-          marginTop: 0,
-        },
-        header2: {
-          fontSize: 18,
-          bold: true,
-          marginBottom: 15,
-          marginTop: 20,
-        },
-        header3: {
-          fontSize: 14,
-          bold: true,
-          marginBottom: 10,
-          marginTop: 15,
-        },
-        paragraph: {
-          marginBottom: 10,
-        },
-        blockquote: {
-          margin: [15, 10, 15, 10],
-          paddingLeft: 15,
-          borderLeftWidth: 4,
-          borderLeftColor: '#666666',
-          fillColor: '#f5f5f5',
-        },
-        code: {
-          font: 'Courier',
-          fontSize: 10,
-          background: '#f0f0f0',
-        },
-      },
-      pageMargins: [40, 60, 40, 60],
-      pageSize: 'A4',
+    // Set font
+    doc.setFont('helvetica')
+    doc.setFontSize(12)
+    
+    // Add title
+    doc.setFontSize(24)
+    doc.setFont('helvetica', 'bold')
+    doc.text(title, 20, 20)
+    
+    // Add a line under title
+    doc.setDrawColor(100, 100, 100)
+    doc.line(20, 25, 190, 25)
+    
+    // Add content
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'normal')
+    
+    // Split text into lines and add to PDF
+    const lines = doc.splitTextToSize(textContent, 170)
+    let y = 35
+    
+    for (const line of lines) {
+      if (y > 280) {
+        doc.addPage()
+        y = 20
+      }
+      doc.text(line, 20, y)
+      y += 6
     }
     
-    // Generate and download PDF
-    const pdfDocGenerator = pdfMake.createPdf(docDefinition)
+    // Save the PDF
+    doc.save(`${title}.pdf`)
     
-    return new Promise((resolve, reject) => {
-      pdfDocGenerator.download(`${title}.pdf`, () => {
-        resolve(true)
-      })
-      
-      // Handle errors
-      pdfDocGenerator.getDataUrl((dataUrl: string) => {
-        if (!dataUrl) {
-          reject(new Error('Failed to generate PDF'))
-        }
-      })
-    })
+    return true
   } catch (error) {
     console.error('Failed to export PDF:', error)
     throw error
   }
+}
+
+// Extract plain text from HTML for PDF
+function extractTextFromHtml(html: string): string {
+  // Replace HTML tags with plain text equivalents
+  let text = html
+    // Headers
+    .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '\n\n## $1 ##\n\n')
+    .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '\n\n### $1 ###\n')
+    .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '\n\n#### $1 ####\n')
+    .replace(/<h4[^>]*>(.*?)<\/h4>/gi, '\n\n##### $1 #####\n')
+    .replace(/<h5[^>]*>(.*?)<\/h5>/gi, '\n\n###### $1 ######\n')
+    .replace(/<h6[^>]*>(.*?)<\/h6>/gi, '\n\n####### $1 #######\n')
+    // Paragraphs
+    .replace(/<p[^>]*>(.*?)<\/p>/gi, '\n$1\n')
+    // Line breaks
+    .replace(/<br\s*\/?>/gi, '\n')
+    // Lists
+    .replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n')
+    .replace(/<\/?[uo]l[^>]*>/gi, '\n')
+    // Blockquotes
+    .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, '\n> $1\n')
+    // Code blocks
+    .replace(/<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gi, '\n```\n$1\n```\n')
+    // Inline code
+    .replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`')
+    // Bold
+    .replace(/<(strong|b)[^>]*>(.*?)<\/(strong|b)>/gi, '**$2**')
+    // Italic
+    .replace(/<(em|i)[^>]*>(.*?)<\/(em|i)>/gi, '*$2*')
+    // Links
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)')
+    // Remove remaining tags
+    .replace(/<[^>]+>/g, '')
+    // Decode HTML entities
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    // Clean up whitespace
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  
+  return text
 }
 
 // Escape HTML text
