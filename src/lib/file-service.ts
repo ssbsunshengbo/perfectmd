@@ -238,99 +238,91 @@ async function importMarkdownFileTauri(): Promise<{ content: string; name: strin
   }
 }
 
-// Export to PDF - directly generate PDF file
+// Export to PDF - using pdfmake (no html2canvas color issues)
 export async function exportToPdf(title: string, content: string): Promise<boolean> {
   try {
-    // Import html2pdf.js
-    const html2pdf = (await import('html2pdf.js')).default
+    // Dynamic imports
+    const pdfMake = (await import('pdfmake/build/pdfmake')).default
+    const pdfFonts = (await import('pdfmake/build/vfs_fonts')).default
+    const htmlToPdfmake = (await import('html-to-pdfmake')).default
     
-    // Create an iframe to isolate from page styles
-    const iframe = document.createElement('iframe')
-    iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:800px;height:600px;'
-    document.body.appendChild(iframe)
+    // Set up fonts
+    pdfMake.vfs = pdfFonts.pdfMake.vfs
     
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
-    if (!iframeDoc) {
-      document.body.removeChild(iframe)
-      throw new Error('Failed to create iframe')
-    }
+    // Clean HTML content
+    const cleanedHtml = cleanHtmlForPdf(content)
     
-    // Write clean HTML to iframe
-    iframeDoc.open()
-    iframeDoc.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body {
-            font-family: "PingFang SC", "Microsoft YaHei", SimHei, sans-serif;
-            font-size: 12pt;
-            line-height: 1.8;
-            color: #333333;
-            background: #ffffff;
-            padding: 20mm;
-          }
-          h1 { font-size: 24pt; font-weight: bold; margin-bottom: 20pt; padding-bottom: 10pt; border-bottom: 2px solid #333; }
-          h2 { font-size: 18pt; font-weight: bold; margin-top: 20pt; margin-bottom: 10pt; }
-          h3 { font-size: 14pt; font-weight: bold; margin-top: 15pt; margin-bottom: 8pt; }
-          p { margin: 10pt 0; }
-          ul, ol { margin: 10pt 0; padding-left: 20pt; }
-          li { margin: 5pt 0; }
-          blockquote { margin: 15pt 0; padding: 10pt 15pt; border-left: 4px solid #666; background: #f5f5f5; }
-          code { font-family: Consolas, Monaco, monospace; background: #f0f0f0; padding: 2pt 6pt; border-radius: 3pt; font-size: 10pt; }
-          pre { margin: 15pt 0; padding: 15pt; background: #2d2d2d; color: #f8f8f2; border-radius: 5pt; overflow-x: auto; }
-          pre code { background: transparent; color: inherit; }
-          table { width: 100%; border-collapse: collapse; margin: 15pt 0; }
-          th, td { border: 1px solid #ccc; padding: 8pt; text-align: left; }
-          th { background: #f5f5f5; font-weight: bold; }
-          a { color: #0066cc; }
-          strong, b { font-weight: bold; }
-          em, i { font-style: italic; }
-          hr { border: none; border-top: 1px solid #ccc; margin: 20pt 0; }
-          img { max-width: 100%; }
-        </style>
-      </head>
-      <body>
-        <h1>${escapeHtmlText(title)}</h1>
-        ${cleanHtmlForPdf(content)}
-      </body>
-      </html>
-    `)
-    iframeDoc.close()
+    // Wrap with title
+    const fullHtml = `<h1>${escapeHtmlText(title)}</h1>${cleanedHtml}`
     
-    // Wait for content to render
-    await new Promise(resolve => setTimeout(resolve, 300))
+    // Convert HTML to pdfmake format
+    const pdfContent = htmlToPdfmake(fullHtml, {
+      tableAutoSize: true,
+      imagesByReference: false,
+    })
     
-    // Get the body element from iframe
-    const element = iframeDoc.body
-    
-    // PDF options
-    const opt = {
-      margin: [20, 20, 20, 20],
-      filename: `${title}.pdf`,
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { 
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: 800
+    // Document definition
+    const docDefinition = {
+      content: pdfContent,
+      defaultStyle: {
+        font: 'Roboto',
+        fontSize: 12,
+        lineHeight: 1.5,
       },
-      jsPDF: { 
-        unit: 'mm', 
-        format: 'a4', 
-        orientation: 'portrait' 
-      }
+      styles: {
+        header1: {
+          fontSize: 24,
+          bold: true,
+          marginBottom: 20,
+          marginTop: 0,
+        },
+        header2: {
+          fontSize: 18,
+          bold: true,
+          marginBottom: 15,
+          marginTop: 20,
+        },
+        header3: {
+          fontSize: 14,
+          bold: true,
+          marginBottom: 10,
+          marginTop: 15,
+        },
+        paragraph: {
+          marginBottom: 10,
+        },
+        blockquote: {
+          margin: [15, 10, 15, 10],
+          paddingLeft: 15,
+          borderLeftWidth: 4,
+          borderLeftColor: '#666666',
+          fillColor: '#f5f5f5',
+        },
+        code: {
+          font: 'Courier',
+          fontSize: 10,
+          background: '#f0f0f0',
+        },
+      },
+      pageMargins: [40, 60, 40, 60],
+      pageSize: 'A4',
     }
     
-    // Generate and save PDF
-    await html2pdf().set(opt).from(element).save()
+    // Generate and download PDF
+    const pdfDocGenerator = pdfMake.createPdf(docDefinition)
     
-    // Cleanup
-    document.body.removeChild(iframe)
-    
-    return true
+    return new Promise((resolve, reject) => {
+      pdfDocGenerator.download(`${title}.pdf`, () => {
+        resolve(true)
+      })
+      
+      // Handle errors
+      pdfDocGenerator.getDataUrl((dataUrl: string) => {
+        if (!dataUrl) {
+          reject(new Error('Failed to generate PDF'))
+        }
+      })
+    })
   } catch (error) {
     console.error('Failed to export PDF:', error)
     throw error
