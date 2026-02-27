@@ -238,107 +238,162 @@ async function importMarkdownFileTauri(): Promise<{ content: string; name: strin
   }
 }
 
-// Export to PDF - using jsPDF directly with simple HTML rendering
+// Export to PDF - with path selection and Chinese support
 export async function exportToPdf(title: string, content: string): Promise<boolean> {
   try {
-    // Use jsPDF directly - it's more reliable
-    const { jsPDF } = await import('jspdf')
+    const html2pdf = (await import('html2pdf.js')).default
     
-    // Clean HTML content and extract text
-    const cleanedHtml = cleanHtmlForPdf(content)
-    const textContent = extractTextFromHtml(cleanedHtml)
+    // Create a completely isolated container
+    const container = document.createElement('div')
+    container.id = 'pdf-export-container'
+    container.style.cssText = `
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: 210mm;
+      background: #ffffff;
+      font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", sans-serif;
+      color: #333333;
+      padding: 20mm;
+      box-sizing: border-box;
+    `
     
-    // Create PDF
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    })
+    // Add internal styles (no external CSS, no oklch/lab colors)
+    const styleEl = document.createElement('style')
+    styleEl.textContent = `
+      * { all: initial; }
+      * { box-sizing: border-box; display: block; }
+      html, body, div { display: block; }
+      h1 { font-size: 24pt; font-weight: bold; margin: 0 0 20pt 0; padding-bottom: 10pt; border-bottom: 2px solid #333333; display: block; }
+      h2 { font-size: 18pt; font-weight: bold; margin: 20pt 0 10pt 0; display: block; }
+      h3 { font-size: 14pt; font-weight: bold; margin: 15pt 0 8pt 0; display: block; }
+      h4 { font-size: 12pt; font-weight: bold; margin: 10pt 0 5pt 0; display: block; }
+      p { margin: 10pt 0; line-height: 1.6; display: block; }
+      ul { margin: 10pt 0; padding-left: 20pt; display: block; }
+      ol { margin: 10pt 0; padding-left: 20pt; display: block; }
+      li { margin: 5pt 0; display: list-item; }
+      blockquote { margin: 15pt 0; padding: 10pt 15pt; border-left: 4px solid #666666; background: #f5f5f5; display: block; }
+      code { font-family: "Fira Code", Consolas, Monaco, monospace; background: #f0f0f0; padding: 2pt 6pt; border-radius: 3pt; font-size: 10pt; display: inline; }
+      pre { margin: 15pt 0; padding: 15pt; background: #2d2d2d; color: #f8f8f2; border-radius: 5pt; overflow-x: auto; display: block; }
+      pre code { background: transparent; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; margin: 15pt 0; display: table; }
+      th { border: 1px solid #cccccc; padding: 8pt; background: #f5f5f5; font-weight: bold; display: table-cell; }
+      td { border: 1px solid #cccccc; padding: 8pt; display: table-cell; }
+      a { color: #0066cc; text-decoration: underline; display: inline; }
+      strong, b { font-weight: bold; display: inline; }
+      em, i { font-style: italic; display: inline; }
+      hr { border: none; border-top: 1px solid #cccccc; margin: 20pt 0; display: block; }
+      img { max-width: 100%; display: block; }
+      br { display: block; }
+    `
+    container.appendChild(styleEl)
     
-    // Set font
-    doc.setFont('helvetica')
-    doc.setFontSize(12)
+    // Create content wrapper
+    const contentWrapper = document.createElement('div')
+    contentWrapper.style.cssText = 'font-family: "PingFang SC", "Microsoft YaHei", sans-serif; color: #333333; background: #ffffff;'
     
     // Add title
-    doc.setFontSize(24)
-    doc.setFont('helvetica', 'bold')
-    doc.text(title, 20, 20)
+    const titleEl = document.createElement('h1')
+    titleEl.textContent = title
+    contentWrapper.appendChild(titleEl)
     
-    // Add a line under title
-    doc.setDrawColor(100, 100, 100)
-    doc.line(20, 25, 190, 25)
+    // Clean and add content
+    const cleanedHtml = cleanHtmlForPdf(content)
+    const contentEl = document.createElement('div')
+    contentEl.innerHTML = cleanedHtml
+    contentWrapper.appendChild(contentEl)
     
-    // Add content
-    doc.setFontSize(12)
-    doc.setFont('helvetica', 'normal')
+    container.appendChild(contentWrapper)
+    document.body.appendChild(container)
     
-    // Split text into lines and add to PDF
-    const lines = doc.splitTextToSize(textContent, 170)
-    let y = 35
-    
-    for (const line of lines) {
-      if (y > 280) {
-        doc.addPage()
-        y = 20
+    // PDF options
+    const opt = {
+      margin: [20, 20, 20, 20],
+      filename: `${title}.pdf`,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { 
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        windowWidth: 800,
+        backgroundColor: '#ffffff',
+        // Ignore certain CSS properties
+        onclone: (clonedDoc: Document) => {
+          // Remove all stylesheets from cloned document
+          const styleSheets = clonedDoc.querySelectorAll('link[rel="stylesheet"], style:not(#pdf-export-container style)')
+          styleSheets.forEach(el => el.remove())
+          
+          // Remove all class and style attributes from all elements
+          const allElements = clonedDoc.querySelectorAll('*')
+          allElements.forEach((el: Element) => {
+            el.removeAttribute('class')
+            // Only keep safe inline styles
+            const style = el.getAttribute('style')
+            if (style) {
+              const safeStyles = ['font-weight', 'font-style', 'text-decoration', 'text-align']
+              let newStyle = ''
+              safeStyles.forEach(s => {
+                const match = style.match(new RegExp(s + '\\s*:\\s*([^;]+)', 'i'))
+                if (match) {
+                  newStyle += `${s}:${match[1]};`
+                }
+              })
+              if (newStyle) {
+                el.setAttribute('style', newStyle)
+              } else {
+                el.removeAttribute('style')
+              }
+            }
+          })
+        }
+      },
+      jsPDF: { 
+        unit: 'mm', 
+        format: 'a4', 
+        orientation: 'portrait' 
       }
-      doc.text(line, 20, y)
-      y += 6
     }
     
-    // Save the PDF
-    doc.save(`${title}.pdf`)
+    // Generate PDF as blob
+    const pdfBlob = await html2pdf().set(opt).from(container).outputPdf('blob')
     
-    return true
+    // Clean up container
+    document.body.removeChild(container)
+    
+    // In Tauri, use save dialog to select path
+    if (isTauri()) {
+      const { save } = await import('@tauri-apps/plugin-dialog')
+      const { writeBinaryFile } = await import('@tauri-apps/plugin-fs')
+      
+      const filePath = await save({
+        defaultPath: `${title}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      })
+      
+      if (!filePath) {
+        return false // User cancelled
+      }
+      
+      // Convert blob to ArrayBuffer
+      const arrayBuffer = await pdfBlob.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
+      
+      await writeBinaryFile(filePath, uint8Array)
+      return true
+    } else {
+      // In web, trigger download
+      const url = URL.createObjectURL(pdfBlob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${title}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+      return true
+    }
   } catch (error) {
     console.error('Failed to export PDF:', error)
     throw error
   }
-}
-
-// Extract plain text from HTML for PDF
-function extractTextFromHtml(html: string): string {
-  // Replace HTML tags with plain text equivalents
-  let text = html
-    // Headers
-    .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '\n\n## $1 ##\n\n')
-    .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '\n\n### $1 ###\n')
-    .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '\n\n#### $1 ####\n')
-    .replace(/<h4[^>]*>(.*?)<\/h4>/gi, '\n\n##### $1 #####\n')
-    .replace(/<h5[^>]*>(.*?)<\/h5>/gi, '\n\n###### $1 ######\n')
-    .replace(/<h6[^>]*>(.*?)<\/h6>/gi, '\n\n####### $1 #######\n')
-    // Paragraphs
-    .replace(/<p[^>]*>(.*?)<\/p>/gi, '\n$1\n')
-    // Line breaks
-    .replace(/<br\s*\/?>/gi, '\n')
-    // Lists
-    .replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n')
-    .replace(/<\/?[uo]l[^>]*>/gi, '\n')
-    // Blockquotes
-    .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, '\n> $1\n')
-    // Code blocks
-    .replace(/<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gi, '\n```\n$1\n```\n')
-    // Inline code
-    .replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`')
-    // Bold
-    .replace(/<(strong|b)[^>]*>(.*?)<\/(strong|b)>/gi, '**$2**')
-    // Italic
-    .replace(/<(em|i)[^>]*>(.*?)<\/(em|i)>/gi, '*$2*')
-    // Links
-    .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)')
-    // Remove remaining tags
-    .replace(/<[^>]+>/g, '')
-    // Decode HTML entities
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    // Clean up whitespace
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-  
-  return text
 }
 
 // Escape HTML text
