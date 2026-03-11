@@ -5,9 +5,18 @@ import { FloatingToolbar } from './FloatingToolbar'
 import hljs from 'highlight.js'
 import katex from 'katex'
 
+export interface TocItem {
+  id: string
+  text: string
+  level: number // 1, 2, 3 for H1, H2, H3
+}
+
 interface MarkdownEditorProps {
   content: string
   onChange: (content: string) => void
+  onTocChange?: (items: TocItem[]) => void
+  scrollToHeading?: string | null
+  editorRef?: React.RefObject<HTMLDivElement>
 }
 
 interface FormatState {
@@ -26,7 +35,7 @@ const MIN_FONT_SIZE = 10
 const MAX_FONT_SIZE = 72
 const DEFAULT_FONT_SIZE = 16
 
-export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
+export function MarkdownEditor({ content, onChange, onTocChange, scrollToHeading }: MarkdownEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null)
   const [toolbarState, setToolbarState] = useState({
     visible: false,
@@ -47,14 +56,79 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
   // intercept keydown events or manipulate the selection.
   const isComposingRef = useRef(false)
 
+  // Extract table of contents from editor content
+  const extractToc = useCallback(() => {
+    if (!editorRef.current || !onTocChange) return
+    
+    const headings = editorRef.current.querySelectorAll('h1, h2, h3')
+    const tocItems: TocItem[] = []
+    
+    headings.forEach((heading, index) => {
+      const tagName = heading.tagName.toLowerCase()
+      const level = parseInt(tagName.charAt(1)) // h1 -> 1, h2 -> 2, h3 -> 3
+      const text = heading.textContent?.trim() || ''
+      
+      // Generate unique ID for the heading
+      let id = heading.id
+      if (!id) {
+        id = `heading-${index}-${text.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '')}`
+        heading.id = id
+      }
+      
+      tocItems.push({
+        id,
+        text,
+        level,
+      })
+    })
+    
+    onTocChange(tocItems)
+  }, [onTocChange])
+
   // Handle input changes
   const handleInput = useCallback(() => {
     if (editorRef.current) {
       isInternalChange.current = true
       const newContent = editorRef.current.innerHTML
       onChange(newContent)
+      // Extract TOC after content change
+      extractToc()
     }
-  }, [onChange])
+  }, [onChange, extractToc])
+
+  // Scroll to heading when scrollToHeading changes
+  useEffect(() => {
+    if (!scrollToHeading || !editorRef.current) return
+    
+    const heading = editorRef.current.querySelector(`#${CSS.escape(scrollToHeading)}`)
+    if (heading) {
+      heading.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      // Highlight the heading briefly
+      heading.classList.add('ring-2', 'ring-primary', 'ring-offset-2')
+      setTimeout(() => {
+        heading.classList.remove('ring-2', 'ring-primary', 'ring-offset-2')
+      }, 1500)
+    }
+  }, [scrollToHeading])
+
+  // Auto-scroll to keep cursor visible during editing
+  const scrollToCursor = useCallback(() => {
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed || !editorRef.current) return
+    
+    const range = selection.getRangeAt(0)
+    const rect = range.getBoundingClientRect()
+    const editorRect = editorRef.current.getBoundingClientRect()
+    
+    // Check if cursor is below the visible area
+    if (rect.bottom > editorRect.bottom) {
+      editorRef.current.scrollTop += (rect.bottom - editorRect.bottom + 50)
+    }
+    // Check if cursor is above the visible area
+    else if (rect.top < editorRect.top) {
+      editorRef.current.scrollTop -= (editorRect.top - rect.top + 50)
+    }
+  }, [])
 
   const getTextBeforeCaretInBlock = useCallback((block: HTMLElement, selection: Selection): string => {
     if (!selection.rangeCount) return ''

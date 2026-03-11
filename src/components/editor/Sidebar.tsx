@@ -22,8 +22,13 @@ import {
   ChevronRight,
   Home,
   X,
+  List,
+  FileStack,
+  H1,
+  H2,
+  H3,
 } from 'lucide-react'
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,9 +41,19 @@ import { isTauri, type FileInfo } from '@/lib/file-service'
 
 interface SidebarProps {
   onExport: () => void
+  onTocItemClick?: (id: string) => void
+  tocItems?: TocItem[]
 }
 
-export function Sidebar({ onExport }: SidebarProps) {
+interface TocItem {
+  id: string
+  text: string
+  level: number // 1, 2, 3 for H1, H2, H3
+}
+
+type SidebarTab = 'documents' | 'toc'
+
+export function Sidebar({ onExport, onTocItemClick, tocItems = [] }: SidebarProps) {
   const {
     documents,
     currentDocument,
@@ -66,6 +81,7 @@ export function Sidebar({ onExport }: SidebarProps) {
   const [isCreating, setIsCreating] = useState(false)
   const [newFileName, setNewFileName] = useState('')
   const [isCreatingFile, setIsCreatingFile] = useState(false)
+  const [activeTab, setActiveTab] = useState<SidebarTab>('documents')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const filteredDocuments = documents.filter((doc) =>
@@ -171,6 +187,39 @@ export function Sidebar({ onExport }: SidebarProps) {
       minute: '2-digit',
     })
   }
+
+  // Render TOC
+  const renderToc = () => (
+    <div className="flex flex-col h-full">
+      <div className="p-3 border-b">
+        <h3 className="text-sm font-semibold text-muted-foreground">文档目录</h3>
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="p-2 space-y-1">
+          {tocItems.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              文档中没有标题
+            </div>
+          ) : (
+            tocItems.map((item) => (
+              <div
+                key={item.id}
+                className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-accent transition-colors ${
+                  item.level === 1 ? 'pl-2' : item.level === 2 ? 'pl-4' : 'pl-6'
+                }`}
+                onClick={() => onTocItemClick?.(item.id)}
+              >
+                {item.level === 1 && <H1 className="h-3.5 w-3.5 text-primary shrink-0" />}
+                {item.level === 2 && <H2 className="h-3.5 w-3.5 text-primary shrink-0" />}
+                {item.level === 3 && <H3 className="h-3.5 w-3.5 text-primary shrink-0" />}
+                <span className="truncate text-sm">{item.text}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  )
 
   // Render file tree for file system mode
   const renderFileTree = () => (
@@ -398,11 +447,28 @@ export function Sidebar({ onExport }: SidebarProps) {
           <FileText className="h-5 w-5" />
         </Button>
         <Button
+          variant={activeTab === 'documents' ? 'secondary' : 'ghost'}
+          size="icon"
+          onClick={() => { setActiveTab('documents'); setSidebarOpen(true) }}
+          title="Documents"
+        >
+          <FileStack className="h-5 w-5" />
+        </Button>
+        <Button
+          variant={activeTab === 'toc' ? 'secondary' : 'ghost'}
+          size="icon"
+          onClick={() => { setActiveTab('toc'); setSidebarOpen(true) }}
+          title="Table of Contents"
+        >
+          <List className="h-5 w-5" />
+        </Button>
+        <Button
           variant="ghost"
           size="icon"
           onClick={handleCreateDocument}
           disabled={isCreating}
           title="New document"
+          className="mt-2"
         >
           <Plus className="h-5 w-5" />
         </Button>
@@ -441,17 +507,36 @@ export function Sidebar({ onExport }: SidebarProps) {
         className="hidden"
       />
 
-      {/* Header */}
-      <div className="flex items-center justify-between border-b p-3">
-        <h2 className="text-sm font-semibold">
-          {isFileSystemMode ? 'Files' : 'Documents'}
-        </h2>
+      {/* Header with tabs */}
+      <div className="flex items-center justify-between border-b p-1">
+        <div className="flex">
+          <Button
+            variant={activeTab === 'documents' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="gap-1 h-7"
+            onClick={() => setActiveTab('documents')}
+          >
+            <FileStack className="h-3.5 w-3.5" />
+            <span className="text-xs">
+              {isFileSystemMode ? 'Files' : 'Docs'}
+            </span>
+          </Button>
+          <Button
+            variant={activeTab === 'toc' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="gap-1 h-7"
+            onClick={() => setActiveTab('toc')}
+          >
+            <List className="h-3.5 w-3.5" />
+            <span className="text-xs">目录</span>
+          </Button>
+        </div>
         <div className="flex items-center gap-1">
-          {!isFileSystemMode && (
+          {!isFileSystemMode && activeTab === 'documents' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7" title="Data options">
-                  <Database className="h-4 w-4" />
+                <Button variant="ghost" size="icon" className="h-6 w-6" title="Data options">
+                  <Database className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -471,31 +556,33 @@ export function Sidebar({ onExport }: SidebarProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {isTauri() && !isFileSystemMode && (
+          {isTauri() && !isFileSystemMode && activeTab === 'documents' && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-6 w-6"
               onClick={handleOpenFolder}
               title="Open folder"
             >
-              <FolderOpen className="h-4 w-4" />
+              <FolderOpen className="h-3.5 w-3.5" />
             </Button>
           )}
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
+            className="h-6 w-6"
             onClick={() => setSidebarOpen(false)}
             title="Close sidebar"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
 
-      {/* Content - File Tree or Document List */}
-      {isFileSystemMode ? renderFileTree() : renderDocumentList()}
+      {/* Content */}
+      {activeTab === 'toc' ? renderToc() : (
+        isFileSystemMode ? renderFileTree() : renderDocumentList()
+      )}
     </div>
   )
 }

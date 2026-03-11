@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState, useRef } from 'react'
 import { useEditorStore } from '@/store/editor-store'
-import { MarkdownEditor } from '@/components/editor/MarkdownEditor'
+import { MarkdownEditor, TocItem } from '@/components/editor/MarkdownEditor'
 import { Sidebar } from '@/components/editor/Sidebar'
 import { Header } from '@/components/editor/Header'
 import { EmptyState } from '@/components/editor/EmptyState'
+import { MainToolbar } from '@/components/editor/MainToolbar'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 import { downloadMarkdown } from '@/lib/html-to-markdown'
@@ -20,6 +21,8 @@ export default function Home() {
   } = useEditorStore()
 
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [tocItems, setTocItems] = useState<TocItem[]>([])
+  const [scrollToHeading, setScrollToHeading] = useState<string | null>(null)
 
   useEffect(() => {
     fetchDocuments()
@@ -43,6 +46,13 @@ export default function Home() {
 
     setSaveTimeout(timeout)
   }, [currentDocument, updateCurrentContent, saveDocument, saveTimeout])
+
+  // Handle TOC item click
+  const handleTocItemClick = useCallback((id: string) => {
+    setScrollToHeading(id)
+    // Reset after a short delay to allow re-clicking the same item
+    setTimeout(() => setScrollToHeading(null), 100)
+  }, [])
 
   // Export document with proper formatting
   const handleExport = useCallback(() => {
@@ -87,20 +97,87 @@ export default function Home() {
   }, [currentDocument, saveDocument])
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <Header />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar onExport={handleExport} />
-        <main className="flex-1 overflow-auto bg-background">
+        <Sidebar 
+          onExport={handleExport} 
+          tocItems={tocItems}
+          onTocItemClick={handleTocItemClick}
+        />
+        <div className="flex flex-1 flex-col overflow-hidden">
           {currentDocument ? (
-            <MarkdownEditor
-              content={currentDocument.content}
-              onChange={handleContentChange}
-            />
+            <>
+              {/* Main Toolbar */}
+              <MainToolbar onApplyStyle={(style, value) => {
+                // Apply style by triggering execCommand
+                switch (style) {
+                  case 'bold':
+                    document.execCommand('bold', false)
+                    break
+                  case 'italic':
+                    document.execCommand('italic', false)
+                    break
+                  case 'underline':
+                    document.execCommand('underline', false)
+                    break
+                  case 'strikethrough':
+                    document.execCommand('strikeThrough', false)
+                    break
+                  case 'heading':
+                    document.execCommand('formatBlock', false, `<h${value || '1'}>`)
+                    break
+                  case 'normal':
+                    document.execCommand('formatBlock', false, '<p>')
+                    break
+                  case 'list':
+                    if (value === 'bullet') {
+                      document.execCommand('insertUnorderedList', false)
+                    } else {
+                      document.execCommand('insertOrderedList', false)
+                    }
+                    break
+                  case 'quote':
+                    document.execCommand('formatBlock', false, '<blockquote>')
+                    break
+                  case 'link': {
+                    const linkUrl = prompt('Enter URL:', 'https://')
+                    if (linkUrl) {
+                      document.execCommand('createLink', false, linkUrl)
+                    }
+                    break
+                  }
+                  case 'hr':
+                    document.execCommand('insertHorizontalRule', false)
+                    break
+                  case 'code': {
+                    const selection = window.getSelection()
+                    if (selection && !selection.isCollapsed) {
+                      const range = selection.getRangeAt(0)
+                      const codeSpan = document.createElement('code')
+                      codeSpan.className = 'inline-code'
+                      codeSpan.textContent = selection.toString()
+                      range.deleteContents()
+                      range.insertNode(codeSpan)
+                    }
+                    break
+                  }
+                }
+              }} />
+              {/* Editor Area - fixed overflow to prevent double scrollbar */}
+              <div className="flex-1 overflow-hidden">
+                <MarkdownEditor
+                  content={currentDocument.content}
+                  onChange={handleContentChange}
+                  onTocChange={setTocItems}
+                  scrollToHeading={scrollToHeading}
+                />
+              </div>
+            </>
           ) : (
             <EmptyState />
           )}
-        </main>
+        </div>
       </div>
       <Toaster />
     </div>
