@@ -346,6 +346,35 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     return selection
   }, [])
 
+  const ensureReadyCaretForEmptyEditor = useCallback(() => {
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    if (!editor || !selection) return
+
+    if (!editor.innerHTML.trim()) {
+      editor.innerHTML = '<p><br></p>'
+    }
+
+    const firstParagraph = editor.querySelector('p') as HTMLParagraphElement | null
+    const targetBlock = firstParagraph || editor
+    const textNode = Array.from(targetBlock.childNodes).find((node) => node.nodeType === Node.TEXT_NODE) as Text | undefined
+
+    const range = document.createRange()
+    if (textNode) {
+      range.setStart(textNode, 0)
+    } else if (targetBlock.firstChild) {
+      range.setStart(targetBlock, 0)
+    } else {
+      const anchor = document.createTextNode('')
+      targetBlock.appendChild(anchor)
+      range.setStart(anchor, 0)
+    }
+    range.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    savedRangeRef.current = range.cloneRange()
+  }, [])
+
   const getTextBeforeCaretInBlock = useCallback((block: HTMLElement, selection: Selection): string => {
     if (!selection.rangeCount) return ''
     const range = selection.getRangeAt(0).cloneRange()
@@ -674,13 +703,15 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     return false
   }, [convertBlockTag, deleteMarkdownTrigger, ensureIsolatedBlock, getCurrentBlock, getTextBeforeCaretInBlock, handleInput])
 
-  const clearInlineTypingState = useCallback(() => {
-    // Avoid forcing "bold" off globally; headings rely on their own bold style.
-    const commands: Array<'italic' | 'strikeThrough' | 'underline'> = [
+  const clearInlineTypingState = useCallback((includeBold = false) => {
+    const commands: Array<'bold' | 'italic' | 'strikeThrough' | 'underline'> = [
       'italic',
       'strikeThrough',
       'underline',
     ]
+    if (includeBold) {
+      commands.unshift('bold')
+    }
     for (const command of commands) {
       if (document.queryCommandState(command)) {
         document.execCommand(command, false)
@@ -712,7 +743,14 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
   }, [])
 
   const applyInlineMarkdownShortcut = useCallback((e: React.KeyboardEvent): boolean => {
-    if (e.key !== ' ') return false
+    const isSpaceTrigger = e.key === ' '
+    const isPrintableTrigger =
+      e.key.length === 1 &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+
+    if (!isSpaceTrigger && !isPrintableTrigger) return false
 
     const selection = window.getSelection()
     if (!selection || !selection.isCollapsed || !selection.rangeCount) return false
@@ -723,11 +761,13 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     const textNode = range.startContainer as Text
     const offset = range.startOffset
     const before = textNode.data.slice(0, offset)
+    const candidate = isSpaceTrigger ? before : `${before}${e.key}`
 
     type InlineMatch = {
       regex: RegExp
       build: (match: RegExpMatchArray) => HTMLElement
       resetCommands?: Array<'bold' | 'italic' | 'strikeThrough' | 'underline'>
+      triggerKeys?: string[]
     }
 
     const patterns: InlineMatch[] = [
@@ -740,6 +780,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           return el
         },
         resetCommands: ['bold'],
+        triggerKeys: [' ', '*'],
       },
       {
         // *italic*
@@ -750,6 +791,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           return el
         },
         resetCommands: ['italic'],
+        triggerKeys: [' ', '*'],
       },
       {
         // _italic_
@@ -760,6 +802,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           return el
         },
         resetCommands: ['italic'],
+        triggerKeys: [' ', '_'],
       },
       {
         // ~~strikethrough~~ or ～～strikethrough～～
@@ -770,6 +813,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           return el
         },
         resetCommands: ['strikeThrough'],
+        triggerKeys: [' ', '~', '～'],
       },
       {
         // `inline code`
@@ -780,6 +824,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           el.textContent = m[1]
           return el
         },
+        triggerKeys: [' ', '`'],
       },
       {
         // ++underline++
@@ -790,6 +835,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           return el
         },
         resetCommands: ['underline'],
+        triggerKeys: [' ', '+'],
       },
       {
         // <u>underline</u>
@@ -800,6 +846,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           return el
         },
         resetCommands: ['underline'],
+        triggerKeys: [' '],
       },
       {
         // [label](url)
@@ -812,6 +859,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           el.rel = 'noopener noreferrer'
           return el
         },
+        triggerKeys: [' ', ')'],
       },
       {
         // $inline formula$
@@ -838,15 +886,18 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           }
           return el
         },
+        triggerKeys: [' ', '$'],
       },
     ]
 
     for (const pattern of patterns) {
-      const match = before.match(pattern.regex)
+      if (pattern.triggerKeys && !pattern.triggerKeys.includes(e.key)) continue
+
+      const match = candidate.match(pattern.regex)
       if (!match) continue
 
       const fullMatch = match[0]
-      const replaceStart = offset - fullMatch.length
+      const replaceStart = offset - before.length + candidate.length - fullMatch.length
 
       if (replaceStart < 0) return false
 
@@ -859,16 +910,16 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
 
       const fragment = document.createDocumentFragment()
       const formattedNode = pattern.build(match)
-      const trailingSpace = document.createTextNode(' ')
+      // Keep a dedicated plain-text caret anchor after the formatted node so
+      // subsequent typing stays outside the inline style without needing an
+      // extra visible space or keydown-time selection fixes.
+      const caretAnchor = document.createTextNode('')
       fragment.appendChild(formattedNode)
-      fragment.appendChild(trailingSpace)
-
+      fragment.appendChild(caretAnchor)
       replaceRange.insertNode(fragment)
 
       const caretRange = document.createRange()
-      // Keep caret inside the trailing text node to avoid boundary-affinity
-      // issues where the next character is considered inside inline formatting.
-      caretRange.setStart(trailingSpace, trailingSpace.length)
+      caretRange.setStart(caretAnchor, 0)
       caretRange.collapse(true)
       selection.removeAllRanges()
       selection.addRange(caretRange)
@@ -884,11 +935,10 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       }
       const inHeading = isSelectionInsideHeading()
       if (!inHeading) {
-        clearInlineTypingState()
+        clearInlineTypingState(true)
       }
 
-      // Force next printable input to start outside inline-format context.
-      shouldResetInlineTypingRef.current = !inHeading
+      shouldResetInlineTypingRef.current = false
 
       handleInput()
       return true
@@ -952,10 +1002,18 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         editorRef.current.innerHTML = content || '<p><br></p>'
         ensureCodeBlockControls(editorRef.current)
         renderCodeHighlights(editorRef.current, true)
+        if (!content) {
+          savedRangeRef.current = null
+        }
       }
     }
     isInternalChange.current = false
   }, [content, ensureCodeBlockControls, renderCodeHighlights])
+
+  useEffect(() => {
+    if (!editorRef.current || content) return
+    ensureReadyCaretForEmptyEditor()
+  }, [content, ensureReadyCaretForEmptyEditor])
 
   // Initialize editor content
   useEffect(() => {
@@ -1081,6 +1139,37 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     
     return DEFAULT_FONT_SIZE
   }, [])
+
+  const getFontSizeFromRange = useCallback((range: Range): number => {
+    const nodesToCheck: Node[] = []
+    if (range.startContainer) nodesToCheck.push(range.startContainer)
+    if (range.endContainer && range.endContainer !== range.startContainer) {
+      nodesToCheck.push(range.endContainer)
+    }
+
+    const cloned = range.cloneContents()
+    const sizedInFragment = cloned.querySelector('.font-size-span') as HTMLElement | null
+    if (sizedInFragment) {
+      const parsed = parseInt(sizedInFragment.style.fontSize || '', 10)
+      if (!Number.isNaN(parsed) && parsed > 0) return parsed
+    }
+
+    for (const node of nodesToCheck) {
+      let current: Node | null = node
+      while (current && current !== editorRef.current) {
+        if (
+          current.nodeType === Node.ELEMENT_NODE &&
+          (current as HTMLElement).classList.contains('font-size-span')
+        ) {
+          const parsed = parseInt((current as HTMLElement).style.fontSize || '', 10)
+          if (!Number.isNaN(parsed) && parsed > 0) return parsed
+        }
+        current = current.parentNode
+      }
+    }
+
+    return getFontSizeFromNode(range.startContainer)
+  }, [getFontSizeFromNode])
 
   // Helper to select an element and place current selection on it.
   const selectElement = useCallback((element: HTMLElement) => {
@@ -1270,9 +1359,50 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     const currentBlock = getCurrentBlock(selection)
     if (!currentBlock || currentBlock === editor) return false
 
+    const placeCaretInBlockStart = (block: HTMLElement) => {
+      const caret = document.createRange()
+      caret.selectNodeContents(block)
+      caret.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(caret)
+      savedRangeRef.current = caret.cloneRange()
+    }
+
+    const blockContainsSoftBreak = currentBlock.tagName.toLowerCase() !== 'pre' && (
+      !!currentBlock.querySelector('br') ||
+      Array.from(currentBlock.childNodes).some((node) => node.nodeName === 'BR')
+    )
+
+    if (blockContainsSoftBreak) {
+      const isolatedBlock = ensureIsolatedBlock()
+      if (isolatedBlock && isolatedBlock !== currentBlock && isolatedBlock.parentNode) {
+        const blankParagraph = document.createElement('p')
+        blankParagraph.appendChild(document.createElement('br'))
+        isolatedBlock.parentNode.insertBefore(blankParagraph, isolatedBlock)
+        placeCaretInBlockStart(blankParagraph)
+        return true
+      }
+    }
+
     const hasMeaningfulContent = (node: ParentNode): boolean => {
       const text = (node.textContent || '').replace(/\u200b/g, '').trim()
       return text.length > 0 || !!node.querySelector('img, table, hr, pre, ul, ol, blockquote')
+    }
+
+    const hasVisualBreak = (node: ParentNode): boolean => {
+      const children = Array.from(node.childNodes)
+      for (const child of children) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          if ((child.textContent || '').includes('\n')) return true
+          continue
+        }
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const element = child as HTMLElement
+          if (element.tagName.toLowerCase() === 'br') return true
+          if (hasVisualBreak(element)) return true
+        }
+      }
+      return false
     }
 
     const ensureBlockPlaceholder = (block: HTMLElement) => {
@@ -1282,11 +1412,18 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
 
     const inlineTags = new Set(['span', 'font', 'strong', 'em', 'b', 'i', 'u', 'a', 's', 'del', 'code'])
-    const stripLeadingSoftBreak = (node: ParentNode): boolean => {
+    const consumeLeadingVisualBreak = (node: ParentNode): boolean => {
       let child = node.firstChild
       while (child) {
         if (child.nodeType === Node.TEXT_NODE) {
-          if (child.textContent?.replace(/\u200b/g, '').trim()) return false
+          const text = child.textContent || ''
+          const withoutZwsp = text.replace(/\u200b/g, '')
+          const leadingMatch = withoutZwsp.match(/^[\s\u00a0]*\n/)
+          if (leadingMatch) {
+            child.textContent = text.replace(/^([\u200b\s\u00a0]*)\n/, '$1')
+            return true
+          }
+          if (withoutZwsp.trim()) return false
           const next = child.nextSibling
           child.parentNode?.removeChild(child)
           child = next
@@ -1301,7 +1438,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
             return true
           }
           if (inlineTags.has(tag)) {
-            const stripped = stripLeadingSoftBreak(element)
+            const stripped = consumeLeadingVisualBreak(element)
             const shouldRemoveEmptyWrapper =
               !hasMeaningfulContent(element) &&
               !element.querySelector('br, img, table, hr, pre, ul, ol, blockquote')
@@ -1320,22 +1457,91 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       return false
     }
 
-    const range = selection.getRangeAt(0)
-    if (!range.collapsed) {
-      range.deleteContents()
+    const consumeTrailingVisualBreak = (node: ParentNode): boolean => {
+      let child = node.lastChild
+      while (child) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          const text = child.textContent || ''
+          const withoutZwsp = text.replace(/\u200b/g, '')
+          const trailingMatch = withoutZwsp.match(/\n[\s\u00a0]*$/)
+          if (trailingMatch) {
+            child.textContent = text.replace(/\n([\u200b\s\u00a0]*)$/, '$1')
+            return true
+          }
+          if (withoutZwsp.trim()) return false
+          const previous = child.previousSibling
+          child.parentNode?.removeChild(child)
+          child = previous
+          continue
+        }
+
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const element = child as HTMLElement
+          const tag = element.tagName.toLowerCase()
+          if (tag === 'br') {
+            element.parentNode?.removeChild(element)
+            return true
+          }
+          if (inlineTags.has(tag)) {
+            const stripped = consumeTrailingVisualBreak(element)
+            const shouldRemoveEmptyWrapper =
+              !hasMeaningfulContent(element) &&
+              !element.querySelector('br, img, table, hr, pre, ul, ol, blockquote')
+            if (shouldRemoveEmptyWrapper) {
+              element.parentNode?.removeChild(element)
+            }
+            if (stripped) return true
+            child = shouldRemoveEmptyWrapper ? node.lastChild : element.previousSibling
+            continue
+          }
+        }
+
+        return false
+      }
+
+      return false
     }
 
-    const liveRange = selection.getRangeAt(0)
+    let range = selection.getRangeAt(0)
+    if (!range.collapsed) {
+      range.deleteContents()
+      range = selection.getRangeAt(0)
+    }
+
+    const splitMarker = document.createComment('enter-split-marker')
+    range.insertNode(splitMarker)
+
+    const previewBeforeRange = document.createRange()
+    previewBeforeRange.selectNodeContents(currentBlock)
+    previewBeforeRange.setEndBefore(splitMarker)
+    const previewBefore = previewBeforeRange.cloneContents()
+    const caretStartsAfterVisualBreak = consumeTrailingVisualBreak(previewBefore)
+
+    const previewRange = document.createRange()
+    previewRange.setStartAfter(splitMarker)
+    previewRange.setEnd(currentBlock, currentBlock.childNodes.length)
+    const previewTrailing = previewRange.cloneContents()
+    const shouldInsertBlankLineBeforeTrailing = consumeLeadingVisualBreak(previewTrailing)
+
     const extractRange = document.createRange()
-    extractRange.setStart(liveRange.startContainer, liveRange.startOffset)
+    extractRange.setStartAfter(splitMarker)
     extractRange.setEnd(currentBlock, currentBlock.childNodes.length)
     const trailingContent = extractRange.extractContents()
+    splitMarker.parentNode?.removeChild(splitMarker)
 
     let hasTrailing = hasMeaningfulContent(trailingContent)
+    const trailingContainsVisualBreak = hasVisualBreak(trailingContent)
     let leadingSoftBreak = false
-    while (hasTrailing && stripLeadingSoftBreak(trailingContent)) {
+    while (hasTrailing && consumeLeadingVisualBreak(trailingContent)) {
       leadingSoftBreak = true
       hasTrailing = hasMeaningfulContent(trailingContent)
+    }
+
+    if (caretStartsAfterVisualBreak) {
+      while (consumeTrailingVisualBreak(currentBlock)) {
+        // Remove the soft-break that visually belonged between the two lines
+        // so the current block becomes the actual previous paragraph.
+      }
     }
 
     ensureBlockPlaceholder(currentBlock)
@@ -1345,7 +1551,12 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     currentBlock.parentNode?.insertBefore(newParagraph, currentBlock.nextSibling)
 
     if (hasTrailing) {
-      if (leadingSoftBreak) {
+      if (
+        leadingSoftBreak ||
+        shouldInsertBlankLineBeforeTrailing ||
+        trailingContainsVisualBreak ||
+        caretStartsAfterVisualBreak
+      ) {
         const trailingParagraph = document.createElement('p')
         trailingParagraph.appendChild(trailingContent)
         ensureBlockPlaceholder(trailingParagraph)
@@ -1358,13 +1569,9 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
 
     const caret = document.createRange()
-    caret.selectNodeContents(newParagraph)
-    caret.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(caret)
-    savedRangeRef.current = caret.cloneRange()
+    placeCaretInBlockStart(newParagraph)
     return true
-  }, [getCurrentBlock])
+  }, [ensureIsolatedBlock, getCurrentBlock])
 
   const exitHeadingWithParagraph = useCallback((): boolean => {
     const selection = window.getSelection()
@@ -1633,6 +1840,31 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     const target = e.target as HTMLElement
     if (!editorRef.current) return
 
+    const placeCaretFromPoint = () => {
+      const doc = document as Document & {
+        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
+        caretRangeFromPoint?: (x: number, y: number) => Range | null
+      }
+      const selection = window.getSelection()
+      if (!selection) return
+      if (selection.rangeCount > 0 && !selection.getRangeAt(0).collapsed) return
+
+      let nextRange: Range | null = null
+      const caretPosition = doc.caretPositionFromPoint?.(e.clientX, e.clientY)
+      if (caretPosition) {
+        nextRange = document.createRange()
+        nextRange.setStart(caretPosition.offsetNode, caretPosition.offset)
+        nextRange.collapse(true)
+      } else {
+        nextRange = doc.caretRangeFromPoint?.(e.clientX, e.clientY) || null
+      }
+
+      if (!nextRange || !editorRef.current?.contains(nextRange.startContainer)) return
+      selection.removeAllRanges()
+      selection.addRange(nextRange)
+      savedRangeRef.current = nextRange.cloneRange()
+    }
+
     const formula = target.closest('.formula-inline')
     if (formula) return
 
@@ -1692,6 +1924,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     setEditingLink(null)
     setSelectedImage(null)
     setImageOverlayRect(null)
+    placeCaretFromPoint()
   }, [recalcSelectedImageOverlay])
 
   const openExternalUrl = useCallback((href: string) => {
@@ -1943,14 +2176,104 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
 
     const fragment = range.extractContents()
-    const fontSpan = document.createElement('span')
-    fontSpan.className = 'font-size-span'
-    fontSpan.style.fontSize = `${size}px`
-    fontSpan.style.lineHeight = '1.6'
-    fontSpan.appendChild(fragment)
-    range.insertNode(fontSpan)
+    const blockTags = new Set(['p', 'div', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'ul', 'ol', 'table', 'tr', 'td', 'th'])
+    const existingSizedSpans = Array.from(fragment.querySelectorAll('.font-size-span')) as HTMLElement[]
+    const containsStructuredContent =
+      existingSizedSpans.length > 0 ||
+      !!fragment.querySelector?.('p, div, li, blockquote, h1, h2, h3, h4, h5, h6, pre, ul, ol, table, tr, td, th, br')
+
+    const wrapTextNodeWithFontSize = (textNode: Text) => {
+      if (!textNode.textContent?.trim()) return
+      const parent = textNode.parentNode
+      if (!parent) return
+      if (
+        parent.nodeType === Node.ELEMENT_NODE &&
+        (parent as HTMLElement).classList.contains('font-size-span')
+      ) {
+        const parentEl = parent as HTMLElement
+        parentEl.style.fontSize = `${size}px`
+        parentEl.style.lineHeight = '1.6'
+        return
+      }
+      const fontSpan = document.createElement('span')
+      fontSpan.className = 'font-size-span'
+      fontSpan.style.fontSize = `${size}px`
+      fontSpan.style.lineHeight = '1.6'
+      parent.insertBefore(fontSpan, textNode)
+      fontSpan.appendChild(textNode)
+    }
+
+    let firstInsertedNode: Node | null = null
+    let lastInsertedNode: Node | null = null
+
+    if (containsStructuredContent) {
+      existingSizedSpans.forEach((span) => {
+        span.style.fontSize = `${size}px`
+        span.style.lineHeight = '1.6'
+      })
+
+      const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT)
+      const textNodes: Text[] = []
+      let current: Node | null = walker.nextNode()
+      while (current) {
+        const textNode = current as Text
+        let shouldWrap = !!textNode.textContent?.trim()
+        let ancestor = textNode.parentNode
+        while (shouldWrap && ancestor && ancestor !== fragment) {
+          if (
+            ancestor.nodeType === Node.ELEMENT_NODE &&
+            (ancestor as HTMLElement).classList.contains('font-size-span')
+          ) {
+            shouldWrap = false
+            break
+          }
+          if (
+            ancestor.nodeType === Node.ELEMENT_NODE &&
+            blockTags.has((ancestor as HTMLElement).tagName.toLowerCase())
+          ) {
+            break
+          }
+          ancestor = ancestor.parentNode
+        }
+        if (shouldWrap) {
+          textNodes.push(textNode)
+        }
+        current = walker.nextNode()
+      }
+
+      textNodes.forEach(wrapTextNodeWithFontSize)
+      firstInsertedNode = fragment.firstChild
+      lastInsertedNode = fragment.lastChild
+      range.insertNode(fragment)
+    } else {
+      const fontSpan = document.createElement('span')
+      fontSpan.className = 'font-size-span'
+      fontSpan.style.fontSize = `${size}px`
+      fontSpan.style.lineHeight = '1.6'
+      fontSpan.appendChild(fragment)
+      firstInsertedNode = fontSpan
+      lastInsertedNode = fontSpan
+      range.insertNode(fontSpan)
+    }
+
     const newRange = document.createRange()
-    newRange.selectNodeContents(fontSpan)
+    try {
+      if (
+        firstInsertedNode &&
+        lastInsertedNode &&
+        firstInsertedNode.parentNode &&
+        lastInsertedNode.parentNode
+      ) {
+        newRange.setStartBefore(firstInsertedNode)
+        newRange.setEndAfter(lastInsertedNode)
+      } else {
+        newRange.setStart(range.startContainer, range.startOffset)
+        newRange.setEnd(range.endContainer, range.endOffset)
+      }
+    } catch {
+      newRange.setStart(range.startContainer, range.startOffset)
+      newRange.setEnd(range.endContainer, range.endOffset)
+    }
     selection.removeAllRanges()
     selection.addRange(newRange)
     savedRangeRef.current = newRange.cloneRange()
@@ -2010,12 +2333,12 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         return
       }
       case 'fontSizeIncrease': {
-        const currentSize = getFontSizeFromNode(range.commonAncestorContainer)
+        const currentSize = getFontSizeFromRange(range)
         applyFontSize(Math.min(currentSize + FONT_SIZE_STEP, MAX_FONT_SIZE))
         return
       }
       case 'fontSizeDecrease': {
-        const currentSize = getFontSizeFromNode(range.commonAncestorContainer)
+        const currentSize = getFontSizeFromRange(range)
         applyFontSize(Math.max(currentSize - FONT_SIZE_STEP, MIN_FONT_SIZE))
         return
       }
@@ -2173,7 +2496,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
 
     // Trigger content update
     handleInput()
-  }, [applyFontSize, clearColorTypingState, clearInlineTypingState, ensureCaretOutsideInlineFormatting, ensureIsolatedBlock, getCurrentBlock, getCurrentListItem, getCurrentTableCell, getFontSizeFromNode, handleInput, insertCodeBlockAtCaret, insertHtmlAtCaret, openFormulaDialog, restoreSavedSelection, wrapSelectionWithStyle])
+  }, [applyFontSize, clearColorTypingState, clearInlineTypingState, ensureCaretOutsideInlineFormatting, ensureIsolatedBlock, getCurrentBlock, getCurrentListItem, getCurrentTableCell, getFontSizeFromRange, handleInput, insertCodeBlockAtCaret, insertHtmlAtCaret, openFormulaDialog, restoreSavedSelection, wrapSelectionWithStyle])
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -2273,15 +2596,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         !e.metaKey &&
         !e.altKey
       ) {
-        const stillInsideInline = isCaretInsideInlineFormatting()
         shouldResetInlineTypingRef.current = false
-        if (stillInsideInline) {
-          // Do not intercept printable keys here. IME composition starts after
-          // keydown in some browsers; preventing default would break CJK input.
-          ensureCaretOutsideInlineFormatting()
-          clearInlineTypingState()
-          clearColorTypingState()
-        }
       }
     }
 
@@ -2330,6 +2645,14 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         className="prose-editor relative flex-1 overflow-y-auto p-8 outline-none focus:outline-none"
         onInput={handleInput}
         onClick={handleEditorClick}
+        onFocus={() => {
+          const selection = window.getSelection()
+          const anchorNode = selection?.anchorNode || null
+          const anchorInsideEditor = !!(anchorNode && editorRef.current?.contains(anchorNode))
+          if (!content || !anchorInsideEditor || anchorNode === editorRef.current) {
+            ensureReadyCaretForEmptyEditor()
+          }
+        }}
         onKeyDown={handleKeyDown}
         onCompositionStart={() => { isComposingRef.current = true }}
         onCompositionEnd={() => {
