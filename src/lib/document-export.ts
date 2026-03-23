@@ -73,85 +73,156 @@ export async function saveAsMarkdown(
 }
 
 // ---------------------------------------------------------------------------
-// Export PDF (direct file generation)
+// Export PDF (text-based print flow)
 // ---------------------------------------------------------------------------
 
-const PDF_RENDER_STYLE = `
-  .pmd-pdf-root {
-    box-sizing: border-box;
-    width: 794px;
-    background: #fff;
-    color: #1e2733;
-    font-size: 14px;
-    line-height: 1.6;
-    font-family:
-      'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Microsoft JhengHei',
-      'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Micro Hei',
-      'Helvetica Neue', Arial, sans-serif;
-    padding: 44px 52px;
-  }
-  .pmd-pdf-root p { margin: 0 0 0.72em; border: 0 !important; background: transparent !important; }
-  .pmd-pdf-root h1, .pmd-pdf-root h2, .pmd-pdf-root h3, .pmd-pdf-root h4, .pmd-pdf-root h5, .pmd-pdf-root h6 {
-    margin: 1em 0 0.42em;
-    border: 0 !important;
-    background: transparent !important;
-  }
-  .pmd-pdf-root pre {
-    margin: 0.6em 0 0.9em;
-    border: 1px solid #d3d9e0;
-    border-radius: 6px;
-    padding: 10px 12px;
-    background: #f8fafc;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-  .pmd-pdf-root table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0.65em 0 0.95em;
-    table-layout: fixed;
-  }
-  .pmd-pdf-root th, .pmd-pdf-root td {
-    border: 1px solid #cfd6de;
-    padding: 6px 8px;
-    text-align: left;
-    vertical-align: top;
-    overflow-wrap: anywhere;
-  }
-  .pmd-pdf-root th { background: #eef2f6; }
-  .pmd-pdf-root .formula-inline {
-    border: 0 !important;
-    background: transparent !important;
-    padding: 0 !important;
-  }
-  .pmd-pdf-root .code-controls,
-  .pmd-pdf-root .code-copy-btn,
-  .pmd-pdf-root .code-copy-toast,
-  .pmd-pdf-root [data-code-lang-select] {
+const PRINT_ROOT_ID = 'pmd-print-root'
+const PRINT_STYLE_ID = 'pmd-print-style'
+const PRINTING_CLASS = 'pmd-printing'
+
+const PRINT_CSS = `
+@page {
+  size: A4;
+  margin: 18mm 15mm 18mm 15mm;
+}
+
+@media print {
+  body.${PRINTING_CLASS} > *:not(#${PRINT_ROOT_ID}) {
     display: none !important;
   }
+
+  body.${PRINTING_CLASS} {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+}
+
+#${PRINT_ROOT_ID} {
+  color: #1e2733;
+  font-size: 13.5px;
+  line-height: 1.68;
+  font-family:
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Microsoft JhengHei',
+    'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Micro Hei',
+    'Helvetica Neue', Arial, sans-serif;
+  background: #fff;
+}
+
+#${PRINT_ROOT_ID} * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+#${PRINT_ROOT_ID} p {
+  margin: 0 0 0.72em !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+#${PRINT_ROOT_ID} h1,
+#${PRINT_ROOT_ID} h2,
+#${PRINT_ROOT_ID} h3,
+#${PRINT_ROOT_ID} h4,
+#${PRINT_ROOT_ID} h5,
+#${PRINT_ROOT_ID} h6 {
+  margin: 1.05em 0 0.42em !important;
+  padding: 0 !important;
+  border: 0 !important;
+  line-height: 1.34 !important;
+  background: transparent !important;
+  color: #132031 !important;
+}
+
+#${PRINT_ROOT_ID} h1 { font-size: 2em !important; }
+#${PRINT_ROOT_ID} h2 { font-size: 1.62em !important; }
+#${PRINT_ROOT_ID} h3 { font-size: 1.33em !important; }
+
+#${PRINT_ROOT_ID} ul,
+#${PRINT_ROOT_ID} ol {
+  margin: 0.35em 0 0.72em !important;
+  padding-left: 1.45em !important;
+}
+
+#${PRINT_ROOT_ID} pre {
+  margin: 0.58em 0 0.9em !important;
+  padding: 0.62em 0.72em !important;
+  border: 1px solid #d3d9e0 !important;
+  border-radius: 6px !important;
+  background: #f8fafc !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  page-break-inside: avoid !important;
+}
+
+#${PRINT_ROOT_ID} table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 0.65em 0 0.95em !important;
+  table-layout: fixed !important;
+  page-break-inside: avoid !important;
+}
+
+#${PRINT_ROOT_ID} th,
+#${PRINT_ROOT_ID} td {
+  border: 1px solid #cfd6de !important;
+  padding: 6px 8px !important;
+  text-align: left !important;
+  vertical-align: top !important;
+  overflow-wrap: anywhere !important;
+}
+
+#${PRINT_ROOT_ID} th {
+  background: #eef2f6 !important;
+}
+
+#${PRINT_ROOT_ID} .formula-inline {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+#${PRINT_ROOT_ID} .katex-display {
+  margin: 0.45em 0 !important;
+}
+
+#${PRINT_ROOT_ID} .code-controls,
+#${PRINT_ROOT_ID} .code-copy-btn,
+#${PRINT_ROOT_ID} .code-copy-toast,
+#${PRINT_ROOT_ID} [data-code-lang-select] {
+  display: none !important;
+}
 `
 
-function createPdfRenderHost(content: string): HTMLElement {
-  const host = document.createElement('div')
-  host.style.cssText = 'position:fixed;left:-100000px;top:0;opacity:0;pointer-events:none;'
-  const style = document.createElement('style')
-  style.textContent = PDF_RENDER_STYLE
-  host.appendChild(style)
+function setupPrintDom(content: string): { root: HTMLElement; styleEl: HTMLStyleElement } {
+  const oldRoot = document.getElementById(PRINT_ROOT_ID)
+  if (oldRoot) oldRoot.remove()
+  const oldStyle = document.getElementById(PRINT_STYLE_ID)
+  if (oldStyle) oldStyle.remove()
+
+  const styleEl = document.createElement('style')
+  styleEl.id = PRINT_STYLE_ID
+  styleEl.textContent = PRINT_CSS
+  document.head.appendChild(styleEl)
 
   const root = document.createElement('div')
-  root.className = 'pmd-pdf-root'
+  root.id = PRINT_ROOT_ID
   root.innerHTML = content
   root.querySelectorAll('.code-controls, .code-copy-btn, .code-copy-toast, [data-code-lang-select]').forEach((el) => el.remove())
   root.querySelectorAll('[contenteditable]').forEach((el) => el.removeAttribute('contenteditable'))
-  host.appendChild(root)
-  document.body.appendChild(host)
-  return host
+  document.body.appendChild(root)
+  document.body.classList.add(PRINTING_CLASS)
+  return { root, styleEl }
 }
 
-function arrayBufferToUint8Array(buffer: ArrayBuffer): Uint8Array {
-  return new Uint8Array(buffer)
+function cleanupPrintDom(root: HTMLElement, styleEl: HTMLStyleElement): void {
+  document.body.classList.remove(PRINTING_CLASS)
+  if (root.parentNode) root.remove()
+  if (styleEl.parentNode) styleEl.remove()
 }
 
 type ExportPdfResult = 'saved' | 'cancelled' | 'fallback'
@@ -161,77 +232,34 @@ export async function exportAsPdf(
   title: string,
 ): Promise<ExportPdfResult> {
   const safeTitle = sanitizeFileBaseName(title)
-  const host = createPdfRenderHost(content)
-  const root = host.querySelector('.pmd-pdf-root') as HTMLElement | null
-  if (!root) {
-    host.remove()
-    return 'fallback'
-  }
+  const prevTitle = document.title
+  document.title = safeTitle
+  const { root, styleEl } = setupPrintDom(content)
 
   try {
-    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-      import('html2canvas'),
-      import('jspdf'),
-    ])
-
-    const canvas = await html2canvas(root, {
-      backgroundColor: '#ffffff',
-      scale: 2,
-      useCORS: true,
-      logging: false,
-    })
-
-    const pdf = new jsPDF({
-      orientation: 'p',
-      unit: 'pt',
-      format: 'a4',
-      compress: true,
-    })
-
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    const pageHeight = pdf.internal.pageSize.getHeight()
-    const imageWidth = pageWidth
-    const imageHeight = (canvas.height * imageWidth) / canvas.width
-    const imageData = canvas.toDataURL('image/png')
-
-    let heightLeft = imageHeight
-    let position = 0
-    pdf.addImage(imageData, 'PNG', 0, position, imageWidth, imageHeight, undefined, 'FAST')
-    heightLeft -= pageHeight
-
-    while (heightLeft > 0) {
-      position = heightLeft - imageHeight
-      pdf.addPage()
-      pdf.addImage(imageData, 'PNG', 0, position, imageWidth, imageHeight, undefined, 'FAST')
-      heightLeft -= pageHeight
-    }
-
-    const arrayBuffer = pdf.output('arraybuffer') as ArrayBuffer
-    const binary = arrayBufferToUint8Array(arrayBuffer)
-
-    if (isTauriRuntime()) {
-      try {
-        const [{ save }, { writeFile }] = await Promise.all([
-          import('@tauri-apps/plugin-dialog'),
-          import('@tauri-apps/plugin-fs'),
-        ])
-        const savePath = await save({
-          defaultPath: `${safeTitle}.pdf`,
-          filters: [{ name: 'PDF', extensions: ['pdf'] }],
-        })
-        if (!savePath) return 'cancelled'
-        await writeFile(savePath, binary)
-        return 'saved'
-      } catch {
-        // Fall through to browser download.
+    const finished = await new Promise<boolean>((resolve) => {
+      let settled = false
+      const done = (ok: boolean) => {
+        if (settled) return
+        settled = true
+        window.removeEventListener('afterprint', afterPrint)
+        resolve(ok)
       }
-    }
-
-    browserDownload(new Blob([binary], { type: 'application/pdf' }), `${safeTitle}.pdf`)
+      const afterPrint = () => done(true)
+      window.addEventListener('afterprint', afterPrint, { once: true })
+      // If runtime does not fire afterprint, still unblock and cleanup.
+      window.setTimeout(() => done(false), 4000)
+      // Important: call print synchronously from click-chain for Tauri/WebView.
+      window.print()
+    })
+    if (!finished) return 'fallback'
     return 'saved'
   } catch {
     return 'fallback'
   } finally {
-    host.remove()
+    window.setTimeout(() => {
+      cleanupPrintDom(root, styleEl)
+      document.title = prevTitle
+    }, 100)
   }
 }
