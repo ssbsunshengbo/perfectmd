@@ -237,22 +237,8 @@ export async function exportAsPdf(
   const { root, styleEl } = setupPrintDom(content)
 
   try {
-    const finished = await new Promise<boolean>((resolve) => {
-      let settled = false
-      const done = (ok: boolean) => {
-        if (settled) return
-        settled = true
-        window.removeEventListener('afterprint', afterPrint)
-        resolve(ok)
-      }
-      const afterPrint = () => done(true)
-      window.addEventListener('afterprint', afterPrint, { once: true })
-      // If runtime does not fire afterprint, still unblock and cleanup.
-      window.setTimeout(() => done(false), 4000)
-      // Important: call print synchronously from click-chain for Tauri/WebView.
-      window.print()
-    })
-    if (!finished) return 'fallback'
+    // Important: call print synchronously from click chain for Tauri/WebView.
+    window.print()
     return 'saved'
   } catch {
     return 'fallback'

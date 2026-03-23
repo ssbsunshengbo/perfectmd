@@ -33,6 +33,18 @@ const normalizeVersion = (input: string) => input.replace(/^v/i, '').trim()
 const isSemanticVersion = (input: string) => /^\d+(\.\d+){1,3}$/.test(input)
 type ReleaseAsset = { name?: string; browser_download_url?: string }
 
+const parseVersionTuple = (input: string): [number, number, number, number] => {
+  const normalized = normalizeVersion(input)
+  const match = normalized.match(/(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?/)
+  if (!match) return [0, 0, 0, 0]
+  return [
+    Number(match[1] || 0),
+    Number(match[2] || 0),
+    Number(match[3] || 0),
+    Number(match[4] || 0),
+  ]
+}
+
 const getRuntimeClientInfo = () => {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : ''
   const platform = typeof navigator !== 'undefined' ? (navigator.platform || '').toLowerCase() : ''
@@ -97,8 +109,8 @@ const chooseBestAssetUrl = (assets: ReleaseAsset[], fallbackUrl: string) => {
 }
 
 const isRemoteVersionNewer = (remote: string, local: string) => {
-  const a = normalizeVersion(remote).split('.').map((n) => Number(n) || 0)
-  const b = normalizeVersion(local).split('.').map((n) => Number(n) || 0)
+  const a = parseVersionTuple(remote)
+  const b = parseVersionTuple(local)
   const maxLength = Math.max(a.length, b.length)
   for (let i = 0; i < maxLength; i += 1) {
     const av = a[i] || 0
@@ -413,14 +425,13 @@ export function Header() {
   const checkForUpdates = useCallback(() => {
     if (!mounted || !appVersion) return
     const localVersion = normalizeVersion(appVersion)
-    if (!isSemanticVersion(localVersion)) return
     fetch(RELEASE_API_URL, { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data?.tag_name || !data?.html_url) return
         const latestTag = String(data.tag_name)
         const remoteVersion = normalizeVersion(latestTag)
-        if (!isSemanticVersion(remoteVersion)) return
+        if (!isSemanticVersion(remoteVersion) && !parseVersionTuple(remoteVersion).some(Boolean)) return
         if (remoteVersion === localVersion) return
         if (!isRemoteVersionNewer(remoteVersion, localVersion)) return
         if (shownUpdateTagRef.current === latestTag) return
@@ -475,9 +486,9 @@ export function Header() {
 
   const handleExportPdf = useCallback(async () => {
     if (!currentDocument) return
-    toast.info('正在导出 PDF…')
+    toast.info('正在打开打印窗口…')
     const result = await exportAsPdf(currentDocument.content, currentDocument.title)
-    if (result === 'saved') toast.success('PDF 已导出')
+    if (result === 'saved') toast.success('请在打印窗口中选择“存储为 PDF”')
     else if (result === 'cancelled') toast.info('已取消导出')
     else if (result === 'fallback') toast.error('PDF 导出失败，请重试')
   }, [currentDocument])
