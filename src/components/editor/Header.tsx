@@ -425,6 +425,8 @@ export function Header() {
   const checkForUpdates = useCallback(() => {
     if (!mounted || !appVersion) return
     const localVersion = normalizeVersion(appVersion)
+    const localTuple = parseVersionTuple(localVersion)
+    if (!isSemanticVersion(localVersion) && !localTuple.some(Boolean)) return
     fetch(RELEASE_API_URL, { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {

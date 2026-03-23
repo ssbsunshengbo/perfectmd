@@ -237,9 +237,43 @@ export async function exportAsPdf(
   const { root, styleEl } = setupPrintDom(content)
 
   try {
-    // Important: call print synchronously from click chain for Tauri/WebView.
-    window.print()
-    return 'saved'
+    const result = await new Promise<ExportPdfResult>((resolve) => {
+      let settled = false
+      let printFlowStarted = false
+
+      const finish = (value: ExportPdfResult) => {
+        if (settled) return
+        settled = true
+        window.removeEventListener('beforeprint', onBeforePrint)
+        window.removeEventListener('afterprint', onAfterPrint)
+        resolve(value)
+      }
+
+      const onBeforePrint = () => {
+        printFlowStarted = true
+      }
+
+      const onAfterPrint = () => {
+        finish('saved')
+      }
+
+      window.addEventListener('beforeprint', onBeforePrint)
+      window.addEventListener('afterprint', onAfterPrint, { once: true })
+
+      try {
+        // Important: call print synchronously from click chain for Tauri/WebView.
+        window.print()
+      } catch {
+        finish('fallback')
+        return
+      }
+
+      // Some runtimes don't emit afterprint; treat beforeprint as success signal.
+      window.setTimeout(() => {
+        finish(printFlowStarted ? 'saved' : 'fallback')
+      }, 1800)
+    })
+    return result
   } catch {
     return 'fallback'
   } finally {
