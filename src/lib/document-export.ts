@@ -91,6 +91,160 @@ function normalizeWhitespace(text: string): string {
   return text.replace(/\u200B/g, '').replace(/\s+/g, ' ').trim()
 }
 
+type RgbColor = [number, number, number]
+type InlineStyle = { color?: RgbColor; backgroundColor?: RgbColor; monospace?: boolean; italic?: boolean }
+type InlineSegment = { text: string; style: InlineStyle; isLineBreak?: boolean }
+
+function parseCssColor(input: string | null | undefined): RgbColor | undefined {
+  if (!input) return undefined
+  const color = input.trim().toLowerCase()
+  const hex = color.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  if (hex) {
+    const value = hex[1]
+    if (value.length === 3) {
+      return [
+        parseInt(value[0] + value[0], 16),
+        parseInt(value[1] + value[1], 16),
+        parseInt(value[2] + value[2], 16),
+      ]
+    }
+    return [
+      parseInt(value.slice(0, 2), 16),
+      parseInt(value.slice(2, 4), 16),
+      parseInt(value.slice(4, 6), 16),
+    ]
+  }
+  const rgb = color.match(/^rgba?\(([^)]+)\)$/)
+  if (!rgb) return undefined
+  const parts = rgb[1].split(',').map((part) => Number(part.trim()))
+  if (parts.length < 3 || parts.slice(0, 3).some((v) => Number.isNaN(v))) return undefined
+  return [
+    Math.max(0, Math.min(255, Math.round(parts[0]))),
+    Math.max(0, Math.min(255, Math.round(parts[1]))),
+    Math.max(0, Math.min(255, Math.round(parts[2]))),
+  ]
+}
+
+function pushInlineText(segments: InlineSegment[], text: string, style: InlineStyle): void {
+  const cleaned = text.replace(/\u200B/g, '')
+  if (!cleaned) return
+  segments.push({ text: cleaned, style })
+}
+
+function collectInlineSegments(node: Node, inherited: InlineStyle = {}): InlineSegment[] {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent || ''
+    return text ? [{ text, style: inherited }] : []
+  }
+  if (!(node instanceof HTMLElement)) return []
+  if (node.tagName === 'BR') return [{ text: '\n', style: inherited, isLineBreak: true }]
+
+  const style: InlineStyle = { ...inherited }
+  const nodeColor = parseCssColor(node.style.color)
+  if (nodeColor) style.color = nodeColor
+  const nodeBg = parseCssColor(node.style.backgroundColor)
+  if (nodeBg) style.backgroundColor = nodeBg
+
+  if (node.tagName === 'CODE') style.monospace = true
+  if (node.tagName === 'EM' || node.tagName === 'I') style.italic = true
+
+  if (node.classList.contains('formula-inline')) {
+    const latex = (node.getAttribute('data-latex') || '').trim()
+    const fallback = normalizeWhitespace(node.textContent || '')
+    const formulaText = latex || fallback
+    return formulaText ? [{ text: formulaText, style: { ...style, italic: true } }] : []
+  }
+
+  const segments: InlineSegment[] = []
+  Array.from(node.childNodes).forEach((child) => {
+    segments.push(...collectInlineSegments(child, style))
+  })
+  return segments
+}
+
+function splitTokenToFit(pdf: jsPDF, token: string, maxWidth: number): string[] {
+  if (!token) return []
+  if (pdf.getTextWidth(token) <= maxWidth) return [token]
+  const result: string[] = []
+  let current = ''
+  for (const ch of Array.from(token)) {
+    const next = `${current}${ch}`
+    if (current && pdf.getTextWidth(next) > maxWidth) {
+      result.push(current)
+      current = ch
+    } else {
+      current = next
+    }
+  }
+  if (current) result.push(current)
+  return result
+}
+
+function drawInlineSegments(
+  ctx: PdfCtx,
+  segments: InlineSegment[],
+  opts: { fontSize: number; lineHeight: number; leftIndent?: number; spacingAfter?: number },
+): void {
+  const leftIndent = opts.leftIndent || 0
+  const lineStep = opts.fontSize * opts.lineHeight
+  const startX = ctx.left + leftIndent
+  const maxX = ctx.left + ctx.width
+  let x = startX
+  let y = ctx.y
+
+  const newLine = () => {
+    y += lineStep
+    ensureSpace(ctx, lineStep)
+    x = startX
+  }
+
+  ensureSpace(ctx, lineStep)
+
+  for (const segment of segments) {
+    if (segment.isLineBreak) {
+      newLine()
+      continue
+    }
+    const raw = segment.text.replace(/\r/g, '')
+    if (!raw) continue
+    const style = segment.style
+    const fontName = style.monospace ? 'courier' : ctx.fontName
+    const fontWeight = style.italic ? 'italic' : 'normal'
+    const textColor = style.color || ([30, 39, 51] as RgbColor)
+    const bgColor = style.backgroundColor
+    const pieces = raw.split(/(\s+)/)
+
+    for (const piece of pieces) {
+      if (!piece) continue
+      if (piece === '\n') {
+        newLine()
+        continue
+      }
+
+      ctx.pdf.setFont(fontName, fontWeight)
+      ctx.pdf.setFontSize(opts.fontSize)
+      const chunks = splitTokenToFit(ctx.pdf, piece, Math.max(12, maxX - x))
+
+      for (const chunk of chunks) {
+        const chunkWidth = ctx.pdf.getTextWidth(chunk)
+        if (x + chunkWidth > maxX && x > startX) {
+          newLine()
+        }
+        if (bgColor) {
+          ctx.pdf.setFillColor(bgColor[0], bgColor[1], bgColor[2])
+          ctx.pdf.rect(x, y + 1, chunkWidth, lineStep - 2, 'F')
+        }
+        ctx.pdf.setTextColor(textColor[0], textColor[1], textColor[2])
+        ctx.pdf.text(chunk, x, y, { baseline: 'top' })
+        x += chunkWidth
+      }
+    }
+  }
+
+  ctx.pdf.setTextColor(30, 39, 51)
+  ctx.y = y + (opts.spacingAfter ?? opts.fontSize * 0.45)
+}
+
 function collectInlineText(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) return (node.textContent || '').replace(/\u200B/g, '')
   if (!(node instanceof HTMLElement)) return ''
@@ -255,14 +409,14 @@ function renderNode(ctx: PdfCtx, node: Node): void {
   const tag = node.tagName
   if (tag === 'P') {
     const nestedList = node.querySelector(':scope > ul, :scope > ol')
-    const paragraphText = normalizeWhitespace(
-      Array.from(node.childNodes)
-        .filter((child) => !(child instanceof HTMLElement && (child.tagName === 'UL' || child.tagName === 'OL')))
-        .map(collectInlineText)
-        .join(' '),
-    )
-    if (paragraphText) {
-      drawWrappedParagraph(ctx, paragraphText, { fontSize: 12.5, lineHeight: 1.64, spacingAfter: 8 })
+    const paragraphSegments: InlineSegment[] = []
+    Array.from(node.childNodes)
+      .filter((child) => !(child instanceof HTMLElement && (child.tagName === 'UL' || child.tagName === 'OL')))
+      .forEach((child) => {
+        paragraphSegments.push(...collectInlineSegments(child))
+      })
+    if (paragraphSegments.length) {
+      drawInlineSegments(ctx, paragraphSegments, { fontSize: 12.5, lineHeight: 1.64, spacingAfter: 8 })
     }
     if (nestedList instanceof HTMLElement) renderList(ctx, nestedList)
     return
@@ -321,6 +475,18 @@ function renderNode(ctx: PdfCtx, node: Node): void {
       leftIndent: 10,
       spacingAfter: 8,
     })
+    return
+  }
+  if (node.classList.contains('formula-inline')) {
+    const latex = (node.getAttribute('data-latex') || '').trim()
+    const text = latex || normalizeWhitespace(node.textContent || '')
+    if (text) {
+      drawWrappedParagraph(ctx, text, {
+        fontSize: 12,
+        lineHeight: 1.5,
+        spacingAfter: 8,
+      })
+    }
     return
   }
 
