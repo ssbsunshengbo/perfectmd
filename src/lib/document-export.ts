@@ -7,7 +7,6 @@
  */
 
 import { htmlToMarkdown } from './html-to-markdown'
-import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 
 // ---------------------------------------------------------------------------
@@ -75,156 +74,221 @@ export async function saveAsMarkdown(
 }
 
 // ---------------------------------------------------------------------------
-// Export PDF (text-based print flow)
+// Export PDF (real text PDF, selectable/copyable)
 // ---------------------------------------------------------------------------
 
-const PRINT_ROOT_ID = 'pmd-print-root'
-const PRINT_STYLE_ID = 'pmd-print-style'
-const PRINTING_CLASS = 'pmd-printing'
-
-const PRINT_CSS = `
-@page {
-  size: A4;
-  margin: 18mm 15mm 18mm 15mm;
-}
-
-@media print {
-  body.${PRINTING_CLASS} > *:not(#${PRINT_ROOT_ID}) {
-    display: none !important;
-  }
-
-  body.${PRINTING_CLASS} {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #fff !important;
-  }
-}
-
-#${PRINT_ROOT_ID} {
-  color: #1e2733;
-  font-size: 13.5px;
-  line-height: 1.68;
-  font-family:
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Microsoft JhengHei',
-    'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Micro Hei',
-    'Helvetica Neue', Arial, sans-serif;
-  background: #fff;
-}
-
-#${PRINT_ROOT_ID} * {
-  box-shadow: none !important;
-  text-shadow: none !important;
-}
-
-#${PRINT_ROOT_ID} p {
-  margin: 0 0 0.72em !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-}
-
-#${PRINT_ROOT_ID} h1,
-#${PRINT_ROOT_ID} h2,
-#${PRINT_ROOT_ID} h3,
-#${PRINT_ROOT_ID} h4,
-#${PRINT_ROOT_ID} h5,
-#${PRINT_ROOT_ID} h6 {
-  margin: 1.05em 0 0.42em !important;
-  padding: 0 !important;
-  border: 0 !important;
-  line-height: 1.34 !important;
-  background: transparent !important;
-  color: #132031 !important;
-}
-
-#${PRINT_ROOT_ID} h1 { font-size: 2em !important; }
-#${PRINT_ROOT_ID} h2 { font-size: 1.62em !important; }
-#${PRINT_ROOT_ID} h3 { font-size: 1.33em !important; }
-
-#${PRINT_ROOT_ID} ul,
-#${PRINT_ROOT_ID} ol {
-  margin: 0.35em 0 0.72em !important;
-  padding-left: 1.45em !important;
-}
-
-#${PRINT_ROOT_ID} pre {
-  margin: 0.58em 0 0.9em !important;
-  padding: 0.62em 0.72em !important;
-  border: 1px solid #d3d9e0 !important;
-  border-radius: 6px !important;
-  background: #f8fafc !important;
-  white-space: pre-wrap !important;
-  overflow-wrap: anywhere !important;
-  word-break: break-word !important;
-  font-size: 12px !important;
-  line-height: 1.5 !important;
-  page-break-inside: avoid !important;
-}
-
-#${PRINT_ROOT_ID} table {
-  width: 100% !important;
-  border-collapse: collapse !important;
-  margin: 0.65em 0 0.95em !important;
-  table-layout: fixed !important;
-  page-break-inside: avoid !important;
-}
-
-#${PRINT_ROOT_ID} th,
-#${PRINT_ROOT_ID} td {
-  border: 1px solid #cfd6de !important;
-  padding: 6px 8px !important;
-  text-align: left !important;
-  vertical-align: top !important;
-  overflow-wrap: anywhere !important;
-}
-
-#${PRINT_ROOT_ID} th {
-  background: #eef2f6 !important;
-}
-
-#${PRINT_ROOT_ID} .formula-inline {
-  border: 0 !important;
-  background: transparent !important;
-  padding: 0 !important;
-}
-
-#${PRINT_ROOT_ID} .katex-display {
-  margin: 0.45em 0 !important;
-}
-
-#${PRINT_ROOT_ID} .code-controls,
-#${PRINT_ROOT_ID} .code-copy-btn,
-#${PRINT_ROOT_ID} .code-copy-toast,
-#${PRINT_ROOT_ID} [data-code-lang-select] {
-  display: none !important;
-}
-`
-
-function setupPrintDom(content: string): { root: HTMLElement; styleEl: HTMLStyleElement } {
-  const oldRoot = document.getElementById(PRINT_ROOT_ID)
-  if (oldRoot) oldRoot.remove()
-  const oldStyle = document.getElementById(PRINT_STYLE_ID)
-  if (oldStyle) oldStyle.remove()
-
-  const styleEl = document.createElement('style')
-  styleEl.id = PRINT_STYLE_ID
-  styleEl.textContent = PRINT_CSS
-  document.head.appendChild(styleEl)
-
+function setupExportDom(content: string): HTMLElement {
   const root = document.createElement('div')
-  root.id = PRINT_ROOT_ID
   root.innerHTML = content
-  root.querySelectorAll('.code-controls, .code-copy-btn, .code-copy-toast, [data-code-lang-select]').forEach((el) => el.remove())
+  root
+    .querySelectorAll('.code-controls, .code-copy-btn, .code-copy-toast, [data-code-lang-select]')
+    .forEach((el) => el.remove())
   root.querySelectorAll('[contenteditable]').forEach((el) => el.removeAttribute('contenteditable'))
-  document.body.appendChild(root)
-  document.body.classList.add(PRINTING_CLASS)
-  return { root, styleEl }
+  return root
 }
 
-function cleanupPrintDom(root: HTMLElement, styleEl: HTMLStyleElement): void {
-  document.body.classList.remove(PRINTING_CLASS)
-  if (root.parentNode) root.remove()
-  if (styleEl.parentNode) styleEl.remove()
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\u200B/g, '').replace(/\s+/g, ' ').trim()
+}
+
+function collectInlineText(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return (node.textContent || '').replace(/\u200B/g, '')
+  if (!(node instanceof HTMLElement)) return ''
+  if (node.tagName === 'BR') return '\n'
+  if (node.classList.contains('formula-inline')) {
+    const latex = (node.getAttribute('data-latex') || node.textContent || '').trim()
+    return latex ? `$${latex}$` : ''
+  }
+  if (node.tagName === 'CODE') {
+    return `\`${(node.textContent || '').trim()}\``
+  }
+  return Array.from(node.childNodes).map(collectInlineText).join('')
+}
+
+type PdfCtx = {
+  pdf: jsPDF
+  pageWidth: number
+  pageHeight: number
+  left: number
+  right: number
+  top: number
+  bottom: number
+  width: number
+  y: number
+}
+
+function ensureSpace(ctx: PdfCtx, needed: number): void {
+  if (ctx.y + needed <= ctx.pageHeight - ctx.bottom) return
+  ctx.pdf.addPage()
+  ctx.y = ctx.top
+}
+
+function drawWrappedParagraph(
+  ctx: PdfCtx,
+  text: string,
+  opts: { fontSize: number; lineHeight: number; leftIndent?: number; isBold?: boolean; spacingAfter?: number; fontName?: string },
+): void {
+  const raw = text.replace(/\r/g, '')
+  const normalized = raw.split('\n').map((line) => line.trimEnd())
+  const leftIndent = opts.leftIndent || 0
+  const availableWidth = Math.max(40, ctx.width - leftIndent)
+  ctx.pdf.setFont(opts.fontName || 'helvetica', opts.isBold ? 'bold' : 'normal')
+  ctx.pdf.setFontSize(opts.fontSize)
+  const step = opts.fontSize * opts.lineHeight
+  normalized.forEach((line) => {
+    const para = line.trim()
+    if (!para) {
+      ctx.y += step * 0.65
+      return
+    }
+    const wrapped = ctx.pdf.splitTextToSize(para, availableWidth)
+    ensureSpace(ctx, wrapped.length * step)
+    ctx.pdf.text(wrapped, ctx.left + leftIndent, ctx.y, { baseline: 'top' })
+    ctx.y += wrapped.length * step
+  })
+  ctx.y += opts.spacingAfter ?? opts.fontSize * 0.45
+}
+
+function renderTable(ctx: PdfCtx, table: HTMLTableElement): void {
+  const rows = Array.from(table.querySelectorAll('tr')).map((tr) =>
+    Array.from(tr.children).map((cell) => normalizeWhitespace(cell.textContent || '')),
+  )
+  if (!rows.length) return
+  const colCount = Math.max(...rows.map((r) => r.length), 1)
+  const colWidth = ctx.width / colCount
+  const fontSize = 10.5
+  const lineHeight = 1.35
+  ctx.pdf.setFont('helvetica', 'normal')
+  ctx.pdf.setFontSize(fontSize)
+  const step = fontSize * lineHeight
+  rows.forEach((row, rowIndex) => {
+    const cellLines = row.map((cell) => ctx.pdf.splitTextToSize(cell || ' ', colWidth - 10))
+    const rowHeight = Math.max(...cellLines.map((lines) => Math.max(1, lines.length))) * step + 8
+    ensureSpace(ctx, rowHeight + 2)
+    row.forEach((_, colIndex) => {
+      const x = ctx.left + colIndex * colWidth
+      const y = ctx.y
+      if (rowIndex === 0) {
+        ctx.pdf.setFillColor(238, 242, 246)
+        ctx.pdf.rect(x, y, colWidth, rowHeight, 'F')
+      }
+      ctx.pdf.setDrawColor(207, 214, 222)
+      ctx.pdf.rect(x, y, colWidth, rowHeight)
+      ctx.pdf.text(cellLines[colIndex], x + 5, y + 5, { baseline: 'top' })
+    })
+    ctx.y += rowHeight
+  })
+  ctx.y += 10
+}
+
+function renderList(ctx: PdfCtx, listEl: HTMLElement, level = 0): void {
+  const items = Array.from(listEl.children).filter((el): el is HTMLLIElement => el.tagName === 'LI')
+  items.forEach((item, index) => {
+    const marker = listEl.tagName === 'OL' ? `${index + 1}.` : '•'
+    const itemTextParts: string[] = []
+    item.childNodes.forEach((child) => {
+      if (child instanceof HTMLElement && (child.tagName === 'UL' || child.tagName === 'OL')) return
+      itemTextParts.push(collectInlineText(child))
+    })
+    const itemText = normalizeWhitespace(itemTextParts.join(' '))
+    drawWrappedParagraph(ctx, `${marker} ${itemText}`, {
+      fontSize: 12,
+      lineHeight: 1.5,
+      leftIndent: level * 16,
+      spacingAfter: 2,
+    })
+    Array.from(item.children).forEach((child) => {
+      if ((child.tagName === 'UL' || child.tagName === 'OL') && child instanceof HTMLElement) {
+        renderList(ctx, child, level + 1)
+      }
+    })
+  })
+  ctx.y += 4
+}
+
+function renderNode(ctx: PdfCtx, node: Node): void {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = normalizeWhitespace(node.textContent || '')
+    if (text) {
+      drawWrappedParagraph(ctx, text, { fontSize: 12.5, lineHeight: 1.6 })
+    }
+    return
+  }
+  if (!(node instanceof HTMLElement)) return
+
+  const tag = node.tagName
+  if (tag === 'P') {
+    const nestedList = node.querySelector(':scope > ul, :scope > ol')
+    const paragraphText = normalizeWhitespace(
+      Array.from(node.childNodes)
+        .filter((child) => !(child instanceof HTMLElement && (child.tagName === 'UL' || child.tagName === 'OL')))
+        .map(collectInlineText)
+        .join(' '),
+    )
+    if (paragraphText) {
+      drawWrappedParagraph(ctx, paragraphText, { fontSize: 12.5, lineHeight: 1.64, spacingAfter: 8 })
+    }
+    if (nestedList instanceof HTMLElement) renderList(ctx, nestedList)
+    return
+  }
+  if (tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'H4' || tag === 'H5' || tag === 'H6') {
+    const level = Number(tag.substring(1))
+    const sizeMap = [0, 24, 20, 17, 15, 14, 13]
+    drawWrappedParagraph(ctx, normalizeWhitespace(node.textContent || ''), {
+      fontSize: sizeMap[level] || 13,
+      lineHeight: 1.35,
+      isBold: true,
+      spacingAfter: 8,
+    })
+    return
+  }
+  if (tag === 'UL' || tag === 'OL') {
+    renderList(ctx, node)
+    return
+  }
+  if (tag === 'PRE') {
+    const codeText = (node.textContent || '').replace(/\u200B/g, '')
+    const lines = codeText.split('\n')
+    const fontSize = 10.5
+    const lineStep = fontSize * 1.45
+    const boxHeight = Math.max(lineStep + 10, lines.length * lineStep + 10)
+    ensureSpace(ctx, boxHeight + 10)
+    ctx.pdf.setFillColor(248, 250, 252)
+    ctx.pdf.setDrawColor(211, 217, 224)
+    ctx.pdf.roundedRect(ctx.left, ctx.y, ctx.width, boxHeight, 4, 4, 'FD')
+    ctx.pdf.setFont('courier', 'normal')
+    ctx.pdf.setFontSize(fontSize)
+    const wrapped = ctx.pdf.splitTextToSize(codeText || ' ', ctx.width - 12)
+    ctx.pdf.text(wrapped, ctx.left + 6, ctx.y + 6, { baseline: 'top' })
+    ctx.y += boxHeight + 10
+    return
+  }
+  if (tag === 'TABLE') {
+    renderTable(ctx, node as HTMLTableElement)
+    return
+  }
+  if (tag === 'HR') {
+    ensureSpace(ctx, 12)
+    ctx.pdf.setDrawColor(220, 225, 232)
+    ctx.pdf.line(ctx.left, ctx.y + 4, ctx.left + ctx.width, ctx.y + 4)
+    ctx.y += 12
+    return
+  }
+  if (tag === 'BLOCKQUOTE') {
+    const quoteText = normalizeWhitespace(node.textContent || '')
+    ensureSpace(ctx, 24)
+    ctx.pdf.setDrawColor(180, 192, 208)
+    ctx.pdf.line(ctx.left + 1, ctx.y, ctx.left + 1, ctx.y + 18)
+    drawWrappedParagraph(ctx, quoteText, {
+      fontSize: 12,
+      lineHeight: 1.55,
+      leftIndent: 10,
+      spacingAfter: 8,
+    })
+    return
+  }
+
+  Array.from(node.childNodes).forEach((child) => renderNode(ctx, child))
 }
 
 type ExportPdfResult = 'saved' | 'cancelled' | 'fallback'
@@ -234,68 +298,29 @@ export async function exportAsPdf(
   title: string,
 ): Promise<ExportPdfResult> {
   const safeTitle = sanitizeFileBaseName(title)
-  const { root, styleEl } = setupPrintDom(content)
+  const root = setupExportDom(content)
 
   try {
-    if (document.fonts?.ready) {
-      await document.fonts.ready
-    }
-
-    const canvas = await html2canvas(root, {
-      backgroundColor: '#ffffff',
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-    })
-
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'pt',
       format: 'a4',
       compress: true,
     })
-
     const pageWidth = pdf.internal.pageSize.getWidth()
     const pageHeight = pdf.internal.pageSize.getHeight()
-    const margin = 36
-    const contentWidth = pageWidth - margin * 2
-    const contentHeight = pageHeight - margin * 2
-
-    const pxPerPt = canvas.width / contentWidth
-    const pageSliceHeightPx = Math.max(1, Math.floor(contentHeight * pxPerPt))
-
-    let renderedFirstPage = false
-    let offsetY = 0
-
-    while (offsetY < canvas.height) {
-      const sliceHeightPx = Math.min(pageSliceHeightPx, canvas.height - offsetY)
-      const pageCanvas = document.createElement('canvas')
-      pageCanvas.width = canvas.width
-      pageCanvas.height = sliceHeightPx
-      const pageCtx = pageCanvas.getContext('2d')
-      if (!pageCtx) return 'fallback'
-
-      pageCtx.fillStyle = '#ffffff'
-      pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height)
-      pageCtx.drawImage(
-        canvas,
-        0,
-        offsetY,
-        canvas.width,
-        sliceHeightPx,
-        0,
-        0,
-        canvas.width,
-        sliceHeightPx,
-      )
-
-      const sliceHeightPt = sliceHeightPx / pxPerPt
-      const imageData = pageCanvas.toDataURL('image/jpeg', 0.98)
-      if (renderedFirstPage) pdf.addPage()
-      pdf.addImage(imageData, 'JPEG', margin, margin, contentWidth, sliceHeightPt)
-      renderedFirstPage = true
-      offsetY += sliceHeightPx
+    const ctx: PdfCtx = {
+      pdf,
+      pageWidth,
+      pageHeight,
+      left: 42,
+      right: 42,
+      top: 42,
+      bottom: 42,
+      width: pageWidth - 84,
+      y: 42,
     }
+    renderNode(ctx, root)
 
     const pdfBytes = pdf.output('arraybuffer')
     const fileName = `${safeTitle}.pdf`
@@ -322,9 +347,5 @@ export async function exportAsPdf(
     return 'saved'
   } catch {
     return 'fallback'
-  } finally {
-    window.setTimeout(() => {
-      cleanupPrintDom(root, styleEl)
-    }, 100)
   }
 }
