@@ -189,16 +189,24 @@ function drawInlineSegments(
   const lineStep = opts.fontSize * opts.lineHeight
   const startX = ctx.left + leftIndent
   const maxX = ctx.left + ctx.width
+  const maxY = ctx.pageHeight - ctx.bottom
   let x = startX
   let y = ctx.y
+  let hasDrawnAnyGlyph = false
+
+  const ensureLocalLineSpace = () => {
+    if (y + lineStep <= maxY) return
+    ctx.pdf.addPage()
+    y = ctx.top
+  }
 
   const newLine = () => {
     y += lineStep
-    ensureSpace(ctx, lineStep)
+    ensureLocalLineSpace()
     x = startX
   }
 
-  ensureSpace(ctx, lineStep)
+  ensureLocalLineSpace()
 
   for (const segment of segments) {
     if (segment.isLineBreak) {
@@ -236,13 +244,15 @@ function drawInlineSegments(
         }
         ctx.pdf.setTextColor(textColor[0], textColor[1], textColor[2])
         ctx.pdf.text(chunk, x, y, { baseline: 'top' })
+        hasDrawnAnyGlyph = hasDrawnAnyGlyph || chunk.trim().length > 0
         x += chunkWidth
       }
     }
   }
 
   ctx.pdf.setTextColor(30, 39, 51)
-  ctx.y = y + (opts.spacingAfter ?? opts.fontSize * 0.45)
+  const consumedHeight = hasDrawnAnyGlyph ? lineStep : 0
+  ctx.y = y + consumedHeight + (opts.spacingAfter ?? opts.fontSize * 0.45)
 }
 
 function collectInlineText(node: Node): string {
