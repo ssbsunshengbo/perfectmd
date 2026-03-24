@@ -2,7 +2,6 @@
 
 import { useEditorStore } from '@/store/editor-store'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import {
   Plus,
@@ -273,8 +272,8 @@ export function Sidebar({ onExport }: SidebarProps) {
             </Button>
           </div>
 
-          <ScrollArea className="flex-1">
-            <div className="space-y-1 p-2">
+          <div className="flex-1 overflow-y-auto px-2 pb-2">
+            <div className="space-y-1 py-2">
               {filteredDocuments.length === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   {searchQuery ? 'No documents found' : 'No documents yet'}
@@ -283,15 +282,26 @@ export function Sidebar({ onExport }: SidebarProps) {
                 filteredDocuments.map((doc) => (
                   <div
                     key={doc.id}
-                    className={`group flex cursor-pointer items-center gap-2 rounded-md p-2 transition-colors hover:bg-accent ${
-                      currentDocument?.id === doc.id ? 'bg-accent' : ''
+                    className={`group flex cursor-pointer items-center gap-2 rounded-md border p-2 transition-colors ${
+                      doc.isPinned
+                        ? 'border-amber-300/80 bg-amber-50/80 dark:border-amber-500/70 dark:bg-amber-950/30'
+                        : 'border-transparent'
+                    } ${
+                      currentDocument?.id === doc.id ? 'bg-accent' : 'hover:bg-accent'
                     }`}
                     onClick={() => setCurrentDocument(doc)}
                   >
                     <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1">
-                        {doc.isPinned && <Pin className="h-3 w-3 text-primary" />}
+                        {doc.isPinned && (
+                          <>
+                            <Pin className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                            <span className="rounded bg-amber-200/80 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:bg-amber-700/40 dark:text-amber-200">
+                              Pinned
+                            </span>
+                          </>
+                        )}
                         <span className="truncate text-sm font-medium">{doc.title}</span>
                       </div>
                       <span className="text-xs text-muted-foreground">
@@ -342,11 +352,11 @@ export function Sidebar({ onExport }: SidebarProps) {
                 ))
               )}
             </div>
-          </ScrollArea>
+          </div>
         </>
       ) : (
-        <ScrollArea className="flex-1">
-          <div className="space-y-1 p-2">
+        <div className="flex-1 overflow-y-auto px-2 pb-2">
+          <div className="space-y-1 py-2">
             {!currentDocument ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
                 Select a document first
@@ -373,7 +383,7 @@ export function Sidebar({ onExport }: SidebarProps) {
               ))
             )}
           </div>
-        </ScrollArea>
+        </div>
       )}
 
       <div className="border-t p-2 text-xs text-muted-foreground">

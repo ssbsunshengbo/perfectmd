@@ -2345,9 +2345,20 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       case 'code': {
         const codeSpan = document.createElement('code')
         codeSpan.className = 'inline-code'
-        codeSpan.textContent = selectedText
+        const codeTextNode = document.createTextNode(selectedText || '')
+        codeSpan.appendChild(codeTextNode)
         range.deleteContents()
         range.insertNode(codeSpan)
+        const caret = document.createRange()
+        if (selectedText) {
+          caret.setStartAfter(codeSpan)
+        } else {
+          caret.setStart(codeTextNode, 0)
+        }
+        caret.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(caret)
+        savedRangeRef.current = caret.cloneRange()
         break
       }
       case 'heading': {
