@@ -115,6 +115,40 @@ type PdfCtx = {
   bottom: number
   width: number
   y: number
+  fontName: string
+  hasBoldFont: boolean
+}
+
+const CJK_FONT_FILE = 'LXGWWenKai-Regular.ttf'
+const CJK_FONT_NAME = 'LxgwWenKai'
+let cjkFontBase64Cache: string | null = null
+
+function bufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    const slice = bytes.subarray(i, i + chunk)
+    binary += String.fromCharCode(...slice)
+  }
+  return btoa(binary)
+}
+
+async function ensurePdfCjkFont(pdf: jsPDF): Promise<boolean> {
+  try {
+    if (!cjkFontBase64Cache) {
+      const fontResponse = await fetch('/fonts/LXGWWenKai-Regular.ttf', { cache: 'force-cache' })
+      if (!fontResponse.ok) return false
+      const fontBuffer = await fontResponse.arrayBuffer()
+      cjkFontBase64Cache = bufferToBase64(fontBuffer)
+    }
+    pdf.addFileToVFS(CJK_FONT_FILE, cjkFontBase64Cache)
+    pdf.addFont(CJK_FONT_FILE, CJK_FONT_NAME, 'normal')
+    pdf.setFont(CJK_FONT_NAME, 'normal')
+    return true
+  } catch {
+    return false
+  }
 }
 
 function ensureSpace(ctx: PdfCtx, needed: number): void {
@@ -132,7 +166,9 @@ function drawWrappedParagraph(
   const normalized = raw.split('\n').map((line) => line.trimEnd())
   const leftIndent = opts.leftIndent || 0
   const availableWidth = Math.max(40, ctx.width - leftIndent)
-  ctx.pdf.setFont(opts.fontName || 'helvetica', opts.isBold ? 'bold' : 'normal')
+  const targetFont = opts.fontName || ctx.fontName
+  const targetWeight = opts.isBold && ctx.hasBoldFont ? 'bold' : 'normal'
+  ctx.pdf.setFont(targetFont, targetWeight)
   ctx.pdf.setFontSize(opts.fontSize)
   const step = opts.fontSize * opts.lineHeight
   normalized.forEach((line) => {
@@ -158,7 +194,7 @@ function renderTable(ctx: PdfCtx, table: HTMLTableElement): void {
   const colWidth = ctx.width / colCount
   const fontSize = 10.5
   const lineHeight = 1.35
-  ctx.pdf.setFont('helvetica', 'normal')
+  ctx.pdf.setFont(ctx.fontName, 'normal')
   ctx.pdf.setFontSize(fontSize)
   const step = fontSize * lineHeight
   rows.forEach((row, rowIndex) => {
@@ -319,6 +355,13 @@ export async function exportAsPdf(
       bottom: 42,
       width: pageWidth - 84,
       y: 42,
+      fontName: 'helvetica',
+      hasBoldFont: true,
+    }
+    const useCjkFont = await ensurePdfCjkFont(pdf)
+    if (useCjkFont) {
+      ctx.fontName = CJK_FONT_NAME
+      ctx.hasBoldFont = false
     }
     renderNode(ctx, root)
 
