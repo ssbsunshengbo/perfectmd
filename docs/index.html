@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PerfectMD - 专业 Markdown 写作体验</title>
+    <meta
+      name="description"
+      content="PerfectMD 是一款面向高效写作与排版的桌面 Markdown 编辑器，提供所见即所得、主题系统、代码高亮、公式、文本级 PDF 导出等能力。"
+    />
+    <style>
+      :root {
+        --bg: #060816;
+        --card: rgba(19, 26, 52, 0.6);
+        --card-border: rgba(116, 146, 255, 0.24);
+        --fg: #edf2ff;
+        --muted: #9da9d6;
+        --primary: #7ea2ff;
+        --primary-2: #3de0ff;
+        --ok: #67f1b7;
+        --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: radial-gradient(1400px 900px at 10% -20%, #16337d, transparent 55%),
+          radial-gradient(1200px 800px at 95% 0%, #122e61, transparent 50%),
+          linear-gradient(180deg, #050712, #070b1d 40%, #060816);
+        color: var(--fg);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .wrap {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        backdrop-filter: blur(10px);
+        background: rgba(8, 12, 30, 0.65);
+        border-bottom: 1px solid rgba(130, 158, 255, 0.16);
+      }
+
+      .nav-inner {
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .brand {
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-2));
+        box-shadow: 0 0 18px rgba(61, 224, 255, 0.8);
+      }
+
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border-radius: 12px;
+        padding: 11px 16px;
+        font-size: 14px;
+        text-decoration: none;
+        border: 1px solid rgba(126, 162, 255, 0.45);
+        background: linear-gradient(180deg, rgba(126, 162, 255, 0.25), rgba(87, 122, 255, 0.16));
+        transition: transform 0.16s ease, box-shadow 0.16s ease;
+      }
+
+      .cta:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 26px rgba(78, 126, 255, 0.25);
+      }
+
+      .hero {
+        padding: 90px 0 48px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(103, 241, 183, 0.35);
+        color: #cafee8;
+        font-size: 13px;
+        padding: 7px 12px;
+        background: rgba(14, 48, 40, 0.38);
+      }
+
+      .hero h1 {
+        margin: 18px 0 14px;
+        font-size: clamp(32px, 6vw, 56px);
+        line-height: 1.06;
+        letter-spacing: -0.6px;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.7;
+      }
+
+      .hero-actions {
+        margin-top: 28px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .cta-ghost {
+        background: transparent;
+        border-color: rgba(255, 255, 255, 0.22);
+      }
+
+      .panel {
+        margin-top: 34px;
+        border: 1px solid var(--card-border);
+        background: var(--card);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .panel-head {
+        border-bottom: 1px solid rgba(124, 151, 255, 0.22);
+        padding: 12px 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .panel-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+      }
+
+      .r { background: #ff6b7f; }
+      .y { background: #ffd166; }
+      .g { background: #65f1a4; }
+
+      .panel-body {
+        padding: 18px;
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        gap: 18px;
+      }
+
+      .mock-side,
+      .mock-editor {
+        border-radius: 14px;
+        border: 1px solid rgba(128, 153, 246, 0.22);
+        background: rgba(7, 11, 27, 0.7);
+      }
+
+      .mock-side {
+        padding: 12px;
+      }
+
+      .mock-file {
+        padding: 10px 11px;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        font-size: 13px;
+        color: #b7c3ef;
+        border: 1px solid transparent;
+      }
+
+      .mock-file.pin {
+        border-color: rgba(255, 196, 104, 0.5);
+        background: rgba(255, 184, 69, 0.15);
+        color: #ffe2a3;
+      }
+
+      .mock-file.active {
+        border-color: rgba(110, 153, 255, 0.55);
+        background: rgba(93, 126, 255, 0.18);
+        color: #dce6ff;
+      }
+
+      .mock-editor {
+        padding: 16px;
+      }
+
+      .line {
+        height: 12px;
+        border-radius: 7px;
+        margin-bottom: 10px;
+        background: linear-gradient(90deg, rgba(145, 170, 255, 0.9), rgba(103, 236, 255, 0.7));
+      }
+
+      .line.s2 { width: 82%; opacity: 0.86; }
+      .line.s3 { width: 62%; opacity: 0.75; }
+      .line.s4 { width: 50%; opacity: 0.7; }
+
+      .section {
+        padding: 72px 0 6px;
+      }
+
+      .section h2 {
+        margin: 0;
+        font-size: 34px;
+      }
+
+      .section .desc {
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.75;
+      }
+
+      .grid {
+        margin-top: 22px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .card {
+        border-radius: 14px;
+        border: 1px solid rgba(128, 153, 246, 0.24);
+        background: rgba(15, 21, 48, 0.6);
+        padding: 16px;
+      }
+
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+
+      .card p {
+        margin: 0;
+        color: #c1cceb;
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .flow {
+        margin-top: 22px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .step {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        border: 1px solid rgba(128, 153, 246, 0.23);
+        background: rgba(15, 21, 48, 0.56);
+        border-radius: 12px;
+        padding: 12px 13px;
+      }
+
+      .idx {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: rgba(126, 162, 255, 0.24);
+        border: 1px solid rgba(126, 162, 255, 0.5);
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        color: #d9e4ff;
+        flex: none;
+      }
+
+      .step strong {
+        display: block;
+        margin-bottom: 3px;
+      }
+
+      .step span {
+        color: #c1cceb;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      footer {
+        padding: 48px 0 64px;
+        color: #98a7dd;
+        font-size: 13px;
+      }
+
+      @media (max-width: 980px) {
+        .panel-body {
+          grid-template-columns: 1fr;
+        }
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <div class="brand"><span class="dot"></span>PerfectMD</div>
+        <a class="cta" href="https://github.com/ssbsunshengbo/perfectmd/releases" target="_blank" rel="noopener noreferrer">
+          下载最新版
+        </a>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <div class="pill">面向创作者的桌面 Markdown 编辑器</div>
+        <h1>写作、排版、导出，一套体验完成。</h1>
+        <p>
+          PerfectMD 将 Markdown 的简洁与富文本编辑体验结合：所见即所得、主题系统、代码与公式、
+          以及文本级 PDF 导出，让你在一个编辑器里完成从草稿到交付。
+        </p>
+        <div class="hero-actions">
+          <a class="cta" href="https://github.com/ssbsunshengbo/perfectmd/releases" target="_blank" rel="noopener noreferrer">立即体验</a>
+          <a class="cta cta-ghost" href="https://github.com/ssbsunshengbo/perfectmd" target="_blank" rel="noopener noreferrer">查看源码</a>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-dot r"></span>
+            <span class="panel-dot y"></span>
+            <span class="panel-dot g"></span>
+          </div>
+          <div class="panel-body">
+            <div class="mock-side">
+              <div class="mock-file pin">📌 项目规划.md</div>
+              <div class="mock-file active">发布说明.md</div>
+              <div class="mock-file">技术设计.md</div>
+              <div class="mock-file">实验记录.md</div>
+              <div class="mock-file">复盘报告.md</div>
+            </div>
+            <div class="mock-editor">
+              <div class="line"></div>
+              <div class="line s2"></div>
+              <div class="line s3"></div>
+              <div class="line s4"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>核心能力</h2>
+        <p class="desc">只展示最值得宣传、最有实际价值的能力，不堆砌琐碎细节。</p>
+        <div class="grid">
+          <article class="card">
+            <h3>所见即所得编辑</h3>
+            <p>标题、列表、段落、inline code、链接、颜色与高亮可直接编辑，降低 Markdown 心智负担。</p>
+          </article>
+          <article class="card">
+            <h3>代码与公式写作</h3>
+            <p>支持代码块语言选择与高亮，支持公式输入与渲染，适合技术文档与学习笔记场景。</p>
+          </article>
+          <article class="card">
+            <h3>可定制主题系统</h3>
+            <p>内置风格模板 + 自定义 CSS，支持团队统一视觉规范，也支持个人偏好自由定制。</p>
+          </article>
+          <article class="card">
+            <h3>文档组织效率</h3>
+            <p>左侧文档列表支持搜索、置顶和滚动浏览，长周期项目中快速定位历史文档。</p>
+          </article>
+          <article class="card">
+            <h3>文本级 PDF 导出</h3>
+            <p>导出结果可选中文字并复制，保留主要结构与样式，适用于评审、汇报和分享。</p>
+          </article>
+          <article class="card">
+            <h3>跨平台发布</h3>
+            <p>提供 macOS（Intel/Apple Silicon）、Windows、Linux 构建，团队成员可直接安装使用。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>工作流示例</h2>
+        <p class="desc">从输入到交付，保持单一工具链，提高产出速度。</p>
+        <div class="flow">
+          <div class="step">
+            <div class="idx">1</div>
+            <div><strong>创建与组织文档</strong><span>新建文档后在列表中管理，置顶关键文档，搜索快速跳转历史内容。</span></div>
+          </div>
+          <div class="step">
+            <div class="idx">2</div>
+            <div><strong>完成内容编辑</strong><span>使用标题、列表、代码、公式、链接与文本样式完成完整排版。</span></div>
+          </div>
+          <div class="step">
+            <div class="idx">3</div>
+            <div><strong>导出并分发</strong><span>一键导出 Markdown / PDF，用于协作、评审、归档和对外分享。</span></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="wrap">
+      <div>© <span id="year"></span> PerfectMD. Built for serious writing.</div>
+    </footer>
+
+    <script>
+      document.getElementById("year").textContent = String(new Date().getFullYear());
+    </script>
+  </body>
+</html>

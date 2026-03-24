@@ -2345,7 +2345,9 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       case 'code': {
         const codeSpan = document.createElement('code')
         codeSpan.className = 'inline-code'
-        const codeTextNode = document.createTextNode(selectedText || '')
+        // Keep an invisible anchor so collapsed-caret insertion stays inside
+        // the inline code node across browsers.
+        const codeTextNode = document.createTextNode(selectedText || '\u200B')
         codeSpan.appendChild(codeTextNode)
         range.deleteContents()
         range.insertNode(codeSpan)
@@ -2353,7 +2355,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         if (selectedText) {
           caret.setStartAfter(codeSpan)
         } else {
-          caret.setStart(codeTextNode, 0)
+          caret.setStart(codeTextNode, codeTextNode.textContent?.length || 0)
         }
         caret.collapse(true)
         selection.removeAllRanges()
