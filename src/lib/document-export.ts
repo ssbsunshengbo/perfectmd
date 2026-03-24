@@ -92,7 +92,16 @@ function normalizeWhitespace(text: string): string {
 }
 
 type RgbColor = [number, number, number]
-type InlineStyle = { color?: RgbColor; backgroundColor?: RgbColor; monospace?: boolean; italic?: boolean }
+type InlineStyle = {
+  color?: RgbColor
+  backgroundColor?: RgbColor
+  monospace?: boolean
+  italic?: boolean
+  bold?: boolean
+  linkHref?: string
+  fontSize?: number
+  lineHeight?: number
+}
 type InlineSegment = { text: string; style: InlineStyle; isLineBreak?: boolean }
 
 function parseCssColor(input: string | null | undefined): RgbColor | undefined {
@@ -131,6 +140,28 @@ function pushInlineText(segments: InlineSegment[], text: string, style: InlineSt
   segments.push({ text: cleaned, style })
 }
 
+function parsePxNumber(input: string | null | undefined): number | undefined {
+  if (!input) return undefined
+  const m = String(input).trim().match(/^([0-9]+(?:\.[0-9]+)?)px$/i)
+  if (!m) return undefined
+  const n = Number(m[1])
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+
+function parseCssLineHeight(input: string | null | undefined): number | undefined {
+  if (!input) return undefined
+  const value = String(input).trim()
+  if (!value || value === 'normal') return undefined
+  const px = parsePxNumber(value)
+  if (px) return px
+  const unitless = Number(value)
+  return Number.isFinite(unitless) && unitless > 0 ? unitless : undefined
+}
+
+function hasCjk(text: string): boolean {
+  return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(text)
+}
+
 function collectInlineSegments(node: Node, inherited: InlineStyle = {}): InlineSegment[] {
   if (node.nodeType === Node.TEXT_NODE) {
     const text = node.textContent || ''
@@ -147,6 +178,19 @@ function collectInlineSegments(node: Node, inherited: InlineStyle = {}): InlineS
 
   if (node.tagName === 'CODE') style.monospace = true
   if (node.tagName === 'EM' || node.tagName === 'I') style.italic = true
+  if (node.tagName === 'STRONG' || node.tagName === 'B') style.bold = true
+  if (node.tagName === 'A') {
+    const href = node.getAttribute('href')?.trim()
+    if (href) style.linkHref = href
+  }
+  const inlineFontSize = parsePxNumber(node.style.fontSize)
+  if (inlineFontSize) style.fontSize = inlineFontSize
+  const inlineLineHeight = parseCssLineHeight(node.style.lineHeight)
+  if (inlineLineHeight) style.lineHeight = inlineLineHeight
+  const weight = Number(node.style.fontWeight)
+  if (node.style.fontWeight === 'bold' || (!Number.isNaN(weight) && weight >= 600)) {
+    style.bold = true
+  }
 
   if (node.classList.contains('formula-inline')) {
     const latex = (node.getAttribute('data-latex') || '').trim()
@@ -186,22 +230,24 @@ function drawInlineSegments(
   opts: { fontSize: number; lineHeight: number; leftIndent?: number; spacingAfter?: number },
 ): void {
   const leftIndent = opts.leftIndent || 0
-  const lineStep = opts.fontSize * opts.lineHeight
+  const baseLineStep = opts.fontSize * opts.lineHeight
   const startX = ctx.left + leftIndent
   const maxX = ctx.left + ctx.width
   const maxY = ctx.pageHeight - ctx.bottom
   let x = startX
   let y = ctx.y
+  let currentLineStep = baseLineStep
   let hasDrawnAnyGlyph = false
 
   const ensureLocalLineSpace = () => {
-    if (y + lineStep <= maxY) return
+    if (y + currentLineStep <= maxY) return
     ctx.pdf.addPage()
     y = ctx.top
   }
 
   const newLine = () => {
-    y += lineStep
+    y += currentLineStep
+    currentLineStep = baseLineStep
     ensureLocalLineSpace()
     x = startX
   }
@@ -217,8 +263,22 @@ function drawInlineSegments(
     if (!raw) continue
     const style = segment.style
     const fontName = style.monospace ? 'courier' : ctx.fontName
-    const fontWeight = style.italic ? 'italic' : 'normal'
-    const textColor = style.color || ([30, 39, 51] as RgbColor)
+    const effectiveFontSize = style.fontSize || opts.fontSize
+    const lineFactor = style.lineHeight && style.lineHeight > 3
+      ? style.lineHeight / Math.max(1, effectiveFontSize)
+      : style.lineHeight || opts.lineHeight
+    const segmentStep = effectiveFontSize * lineFactor
+    currentLineStep = Math.max(currentLineStep, segmentStep)
+    const preferItalic = !!style.italic
+    const preferBold = !!style.bold
+    const canUseItalic = !(fontName === ctx.fontName && hasCjk(raw))
+    let fontWeight: 'normal' | 'italic' | 'bold' | 'bolditalic' = 'normal'
+    if (preferBold && preferItalic && canUseItalic) fontWeight = 'bolditalic'
+    else if (preferBold) fontWeight = ctx.hasBoldFont || fontName !== ctx.fontName ? 'bold' : 'normal'
+    else if (preferItalic && canUseItalic) fontWeight = 'italic'
+    const textColor = style.linkHref
+      ? ([25, 101, 214] as RgbColor)
+      : style.color || ([30, 39, 51] as RgbColor)
     const bgColor = style.backgroundColor
     const pieces = raw.split(/(\s+)/)
 
@@ -230,7 +290,7 @@ function drawInlineSegments(
       }
 
       ctx.pdf.setFont(fontName, fontWeight)
-      ctx.pdf.setFontSize(opts.fontSize)
+      ctx.pdf.setFontSize(effectiveFontSize)
       const chunks = splitTokenToFit(ctx.pdf, piece, Math.max(12, maxX - x))
 
       for (const chunk of chunks) {
@@ -240,10 +300,19 @@ function drawInlineSegments(
         }
         if (bgColor) {
           ctx.pdf.setFillColor(bgColor[0], bgColor[1], bgColor[2])
-          ctx.pdf.rect(x, y + 1, chunkWidth, lineStep - 2, 'F')
+          ctx.pdf.rect(x, y + 1, chunkWidth, segmentStep - 2, 'F')
         }
         ctx.pdf.setTextColor(textColor[0], textColor[1], textColor[2])
         ctx.pdf.text(chunk, x, y, { baseline: 'top' })
+        if (preferBold && fontWeight === 'normal') {
+          // Fallback for fonts without bold face (e.g. bundled CJK regular).
+          ctx.pdf.text(chunk, x + 0.35, y, { baseline: 'top' })
+        }
+        if (style.linkHref) {
+          ctx.pdf.setDrawColor(textColor[0], textColor[1], textColor[2])
+          ctx.pdf.line(x, y + segmentStep - 1.5, x + chunkWidth, y + segmentStep - 1.5)
+          ctx.pdf.link(x, y, chunkWidth, segmentStep, { url: style.linkHref })
+        }
         hasDrawnAnyGlyph = hasDrawnAnyGlyph || chunk.trim().length > 0
         x += chunkWidth
       }
@@ -251,7 +320,7 @@ function drawInlineSegments(
   }
 
   ctx.pdf.setTextColor(30, 39, 51)
-  const consumedHeight = hasDrawnAnyGlyph ? lineStep : 0
+  const consumedHeight = hasDrawnAnyGlyph ? currentLineStep : 0
   ctx.y = y + consumedHeight + (opts.spacingAfter ?? opts.fontSize * 0.45)
 }
 
@@ -344,6 +413,11 @@ function drawWrappedParagraph(
     const wrapped = ctx.pdf.splitTextToSize(para, availableWidth)
     ensureSpace(ctx, wrapped.length * step)
     ctx.pdf.text(wrapped, ctx.left + leftIndent, ctx.y, { baseline: 'top' })
+    if (opts.isBold && !ctx.hasBoldFont && targetFont === ctx.fontName) {
+      wrapped.forEach((segment, idx) => {
+        ctx.pdf.text(segment, ctx.left + leftIndent + 0.35, ctx.y + idx * step, { baseline: 'top' })
+      })
+    }
     ctx.y += wrapped.length * step
   })
   ctx.y += opts.spacingAfter ?? opts.fontSize * 0.45
@@ -456,7 +530,7 @@ function renderNode(ctx: PdfCtx, node: Node): void {
     ctx.pdf.setFillColor(248, 250, 252)
     ctx.pdf.setDrawColor(211, 217, 224)
     ctx.pdf.roundedRect(ctx.left, ctx.y, ctx.width, boxHeight, 4, 4, 'FD')
-    ctx.pdf.setFont('courier', 'normal')
+    ctx.pdf.setFont(ctx.fontName, 'normal')
     ctx.pdf.setFontSize(fontSize)
     const wrapped = ctx.pdf.splitTextToSize(codeText || ' ', ctx.width - 12)
     ctx.pdf.text(wrapped, ctx.left + 6, ctx.y + 6, { baseline: 'top' })
