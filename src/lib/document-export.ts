@@ -7,6 +7,8 @@
  */
 
 import { htmlToMarkdown } from './html-to-markdown'
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -232,22 +234,97 @@ export async function exportAsPdf(
   title: string,
 ): Promise<ExportPdfResult> {
   const safeTitle = sanitizeFileBaseName(title)
-  const prevTitle = document.title
-  document.title = safeTitle
   const { root, styleEl } = setupPrintDom(content)
 
   try {
-    // Important: call print synchronously from click chain for Tauri/WebView.
-    // Some runtimes do not reliably emit beforeprint/afterprint, so treat
-    // a non-throwing print call as successful handoff to system print flow.
-    window.print()
+    if (document.fonts?.ready) {
+      await document.fonts.ready
+    }
+
+    const canvas = await html2canvas(root, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+    })
+
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'pt',
+      format: 'a4',
+      compress: true,
+    })
+
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const margin = 36
+    const contentWidth = pageWidth - margin * 2
+    const contentHeight = pageHeight - margin * 2
+
+    const pxPerPt = canvas.width / contentWidth
+    const pageSliceHeightPx = Math.max(1, Math.floor(contentHeight * pxPerPt))
+
+    let renderedFirstPage = false
+    let offsetY = 0
+
+    while (offsetY < canvas.height) {
+      const sliceHeightPx = Math.min(pageSliceHeightPx, canvas.height - offsetY)
+      const pageCanvas = document.createElement('canvas')
+      pageCanvas.width = canvas.width
+      pageCanvas.height = sliceHeightPx
+      const pageCtx = pageCanvas.getContext('2d')
+      if (!pageCtx) return 'fallback'
+
+      pageCtx.fillStyle = '#ffffff'
+      pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height)
+      pageCtx.drawImage(
+        canvas,
+        0,
+        offsetY,
+        canvas.width,
+        sliceHeightPx,
+        0,
+        0,
+        canvas.width,
+        sliceHeightPx,
+      )
+
+      const sliceHeightPt = sliceHeightPx / pxPerPt
+      const imageData = pageCanvas.toDataURL('image/jpeg', 0.98)
+      if (renderedFirstPage) pdf.addPage()
+      pdf.addImage(imageData, 'JPEG', margin, margin, contentWidth, sliceHeightPt)
+      renderedFirstPage = true
+      offsetY += sliceHeightPx
+    }
+
+    const pdfBytes = pdf.output('arraybuffer')
+    const fileName = `${safeTitle}.pdf`
+
+    if (isTauriRuntime()) {
+      try {
+        const [{ save }, { writeFile }] = await Promise.all([
+          import('@tauri-apps/plugin-dialog'),
+          import('@tauri-apps/plugin-fs'),
+        ])
+        const savePath = await save({
+          defaultPath: fileName,
+          filters: [{ name: 'PDF', extensions: ['pdf'] }],
+        })
+        if (!savePath) return 'cancelled'
+        await writeFile(savePath, new Uint8Array(pdfBytes))
+        return 'saved'
+      } catch {
+        return 'fallback'
+      }
+    }
+
+    browserDownload(new Blob([pdfBytes], { type: 'application/pdf' }), fileName)
     return 'saved'
   } catch {
     return 'fallback'
   } finally {
     window.setTimeout(() => {
       cleanupPrintDom(root, styleEl)
-      document.title = prevTitle
     }, 100)
   }
 }

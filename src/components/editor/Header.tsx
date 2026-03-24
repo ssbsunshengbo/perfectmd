@@ -488,9 +488,9 @@ export function Header() {
 
   const handleExportPdf = useCallback(async () => {
     if (!currentDocument) return
-    toast.info('正在打开打印窗口…')
+    toast.info('正在导出 PDF…')
     const result = await exportAsPdf(currentDocument.content, currentDocument.title)
-    if (result === 'saved') toast.success('请在打印窗口中选择“存储为 PDF”')
+    if (result === 'saved') toast.success('PDF 导出成功')
     else if (result === 'cancelled') toast.info('已取消导出')
     else if (result === 'fallback') toast.error('PDF 导出失败，请重试')
   }, [currentDocument])
