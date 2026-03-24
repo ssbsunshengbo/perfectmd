@@ -1,0 +1,19 @@
+<svg width="760" height="260" viewBox="0 0 760 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="760" height="260" rx="16" fill="#0D152E"/>
+  <rect x="42" y="26" width="206" height="208" rx="12" fill="#F3F7FF"/>
+  <rect x="60" y="48" width="122" height="12" rx="6" fill="#486EE8"/>
+  <rect x="60" y="74" width="166" height="8" rx="4" fill="#8AA4F3"/>
+  <rect x="60" y="90" width="150" height="8" rx="4" fill="#8AA4F3"/>
+  <rect x="60" y="124" width="84" height="8" rx="4" fill="#D46A6A"/>
+  <rect x="150" y="124" width="76" height="8" rx="4" fill="#6F95F6"/>
+  <rect x="60" y="140" width="166" height="8" rx="4" fill="#8AA4F3"/>
+  <rect x="60" y="156" width="166" height="8" rx="4" fill="#8AA4F3"/>
+  <rect x="276" y="74" width="438" height="146" rx="12" fill="#101D3D" stroke="#2F4678"/>
+  <rect x="302" y="96" width="170" height="10" rx="5" fill="#7DE8FF"/>
+  <rect x="302" y="116" width="248" height="10" rx="5" fill="#9AB4FF"/>
+  <rect x="302" y="136" width="210" height="10" rx="5" fill="#FFD879"/>
+  <rect x="302" y="156" width="308" height="10" rx="5" fill="#7CF4C0"/>
+  <rect x="302" y="176" width="350" height="10" rx="5" fill="#CBD8FF" opacity="0.62"/>
+  <rect x="556" y="26" width="158" height="34" rx="10" fill="#4E74FF"/>
+  <text x="635" y="48" text-anchor="middle" fill="#F0F5FF" font-size="14" font-family="Arial, sans-serif">Text PDF</text>
+</svg>
