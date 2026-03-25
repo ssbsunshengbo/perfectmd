@@ -3,28 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PerfectMD - 现代 Markdown 创作体验</title>
+    <title>PerfectMD - Elegant Markdown Experience</title>
     <meta
       name="description"
-      content="PerfectMD 是一个轻量、可定制、跨平台的 Markdown 编辑器，支持丰富文本样式、代码与公式编辑、文本级 PDF 导出。"
+      content="PerfectMD 是一个优雅、轻量、可定制的 Markdown 编辑器。支持文字样式、主题 CSS、代码高亮、公式和文本级 PDF 导出。"
     />
     <style>
+      @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,500;1,700&family=Noto+Serif+SC:wght@500;600;700&display=swap");
+
       :root {
-        --bg: #060913;
-        --bg-soft: #0b1224;
-        --panel: rgba(15, 23, 45, 0.75);
-        --panel-2: rgba(14, 20, 40, 0.86);
-        --line: rgba(137, 164, 255, 0.22);
-        --line-strong: rgba(137, 164, 255, 0.42);
-        --text: #edf2ff;
-        --muted: #9eabd4;
-        --brand: #86a7ff;
-        --brand-2: #4fe3ff;
-        --ok: #74f7be;
-        --shadow: 0 24px 80px rgba(2, 8, 28, 0.45);
-        --radius-xl: 24px;
+        --bg: #04060c;
+        --bg-elev: #0a1022;
+        --line: rgba(255, 255, 255, 0.13);
+        --line-strong: rgba(157, 184, 255, 0.35);
+        --text: #e9efff;
+        --muted: #95a4cf;
+        --brand: #7f9fff;
+        --brand-soft: #5ee5ff;
+        --gold: #ffd07a;
+        --ok: #71f8c0;
+        --radius-xl: 26px;
         --radius-lg: 18px;
-        --radius-md: 14px;
+        --radius-md: 12px;
       }
 
       * {
@@ -37,12 +37,43 @@
         padding: 0;
         color: var(--text);
         background:
-          radial-gradient(1200px 640px at 10% -12%, #203f90, transparent 58%),
-          radial-gradient(900px 600px at 92% 0%, #1a376f, transparent 52%),
-          linear-gradient(180deg, #04070f 0%, #070d1d 55%, #050814 100%);
+          radial-gradient(1100px 680px at -5% -18%, #243f8f, transparent 58%),
+          radial-gradient(900px 600px at 104% -6%, #22376a, transparent 55%),
+          linear-gradient(180deg, #03050c 0%, #060c1b 52%, #04060c 100%);
         font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
           "PingFang SC", "Microsoft YaHei", sans-serif;
-        line-height: 1.55;
+      }
+
+      body::before,
+      body::after {
+        content: "";
+        position: fixed;
+        z-index: -1;
+        pointer-events: none;
+        width: 36vw;
+        aspect-ratio: 1;
+        border-radius: 999px;
+        filter: blur(70px);
+        opacity: 0.16;
+        animation: floatGlow 16s ease-in-out infinite;
+      }
+
+      body::before {
+        background: #5f89ff;
+        top: -12vw;
+        left: -10vw;
+      }
+
+      body::after {
+        background: #56dbff;
+        bottom: -10vw;
+        right: -9vw;
+        animation-delay: 2s;
+      }
+
+      @keyframes floatGlow {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-24px) scale(1.08); }
       }
 
       a {
@@ -51,21 +82,21 @@
       }
 
       .wrap {
-        width: min(1180px, calc(100% - 40px));
+        width: min(1200px, calc(100% - 40px));
         margin: 0 auto;
       }
 
-      .topbar {
+      .nav {
         position: sticky;
         top: 0;
-        z-index: 40;
+        z-index: 90;
         backdrop-filter: blur(14px);
-        background: rgba(8, 12, 28, 0.74);
-        border-bottom: 1px solid rgba(137, 164, 255, 0.16);
+        background: rgba(6, 10, 22, 0.72);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.09);
       }
 
-      .topbar-inner {
-        height: 66px;
+      .nav-inner {
+        height: 68px;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -83,21 +114,21 @@
         width: 10px;
         height: 10px;
         border-radius: 999px;
-        background: linear-gradient(135deg, var(--brand), var(--brand-2));
-        box-shadow: 0 0 22px rgba(79, 227, 255, 0.85);
+        background: linear-gradient(130deg, var(--brand), var(--brand-soft));
+        box-shadow: 0 0 22px rgba(94, 229, 255, 0.85);
       }
 
-      .actions {
+      .btns {
         display: flex;
         gap: 10px;
       }
 
       .btn {
-        border-radius: 12px;
         border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 12px;
         padding: 10px 14px;
         font-size: 14px;
-        transition: all 0.18s ease;
+        transition: transform 0.16s ease, box-shadow 0.16s ease;
       }
 
       .btn:hover {
@@ -105,62 +136,151 @@
       }
 
       .btn.primary {
-        border-color: rgba(123, 162, 255, 0.5);
-        background: linear-gradient(180deg, rgba(123, 162, 255, 0.3), rgba(97, 134, 255, 0.17));
-        box-shadow: 0 8px 30px rgba(87, 117, 255, 0.25);
+        border-color: rgba(143, 171, 255, 0.5);
+        background: linear-gradient(180deg, rgba(127, 159, 255, 0.3), rgba(84, 120, 255, 0.17));
+        box-shadow: 0 10px 30px rgba(71, 106, 245, 0.25);
       }
 
       .hero {
-        padding: 86px 0 46px;
+        padding: 90px 0 56px;
+        position: relative;
+        overflow: hidden;
       }
 
-      .tag {
+      .hero-top {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 22px;
+      }
+
+      .chip {
         display: inline-flex;
         align-items: center;
         gap: 8px;
         border-radius: 999px;
-        padding: 7px 12px;
-        border: 1px solid rgba(116, 247, 190, 0.46);
-        color: #d3ffec;
-        background: rgba(9, 54, 43, 0.35);
+        border: 1px solid rgba(113, 248, 192, 0.4);
+        color: #d8ffef;
         font-size: 13px;
+        padding: 7px 12px;
+        background: rgba(16, 57, 51, 0.36);
       }
 
       .hero h1 {
         margin: 16px 0 14px;
-        font-size: clamp(34px, 7vw, 64px);
-        line-height: 1.02;
-        letter-spacing: -0.8px;
+        font-size: clamp(38px, 7vw, 84px);
+        line-height: 0.96;
+        letter-spacing: -1.2px;
+        max-width: 720px;
+      }
+
+      .hero h1 .kicker {
+        display: block;
+        font-weight: 500;
+        color: #b7c8f9;
+        font-size: clamp(16px, 2vw, 22px);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+      }
+
+      .gradient-ink {
+        background: linear-gradient(102deg, #dce7ff 10%, #8ea8ff 40%, #66e7ff 75%, #f6fbff 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .outline-ink {
+        font-family: "Times New Roman", Georgia, serif;
+        font-style: italic;
+        color: transparent;
+        -webkit-text-stroke: 1px rgba(205, 222, 255, 0.55);
       }
 
       .hero p {
         margin: 0;
-        max-width: 760px;
         color: var(--muted);
-        font-size: 18px;
-        line-height: 1.75;
+        line-height: 1.8;
+        font-size: 17px;
+        max-width: 650px;
       }
 
       .hero-cta {
-        margin-top: 26px;
+        margin-top: 24px;
         display: flex;
-        flex-wrap: wrap;
         gap: 12px;
+        flex-wrap: wrap;
       }
 
-      .hero-preview {
-        margin-top: 34px;
-        border-radius: var(--radius-xl);
-        border: 1px solid var(--line);
-        background: var(--panel);
+      .poem {
+        justify-self: end;
+        align-self: center;
+        width: min(420px, 100%);
+        border-radius: var(--radius-lg);
+        border: 1px solid rgba(184, 205, 255, 0.34);
+        background: linear-gradient(160deg, rgba(22, 35, 72, 0.62), rgba(12, 18, 36, 0.8));
+        padding: 20px 20px 22px;
+        position: relative;
         overflow: hidden;
-        box-shadow: var(--shadow);
       }
 
-      .preview-head {
-        padding: 12px 14px;
+      .poem::before {
+        content: "";
+        position: absolute;
+        inset: 8px;
+        border-radius: 14px;
+        border: 1px solid rgba(240, 246, 255, 0.16);
+        pointer-events: none;
+      }
+
+      .poem::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(420px 80px at 10% -8%, rgba(119, 150, 255, 0.24), transparent 70%),
+          radial-gradient(420px 90px at 85% 110%, rgba(94, 229, 255, 0.18), transparent 70%);
+        pointer-events: none;
+      }
+
+      .poem p {
+        margin: 0;
+        font-size: 18px;
+        line-height: 2;
+        color: #e2ebff;
+        font-family: "Noto Serif SC", "Playfair Display", "Songti SC", serif;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        position: relative;
+        z-index: 1;
+      }
+
+      .hero-stage {
+        margin-top: 26px;
+        border-radius: var(--radius-xl);
+        border: 1px solid rgba(151, 178, 255, 0.24);
+        background: rgba(11, 17, 34, 0.8);
+        overflow: hidden;
+        box-shadow: 0 25px 90px rgba(3, 8, 28, 0.55);
+        transform: translateY(0);
+        transition: transform 0.45s ease;
+      }
+
+      .hero-stage:hover {
+        transform: translateY(-3px);
+      }
+
+      .stage-head {
+        height: 44px;
         border-bottom: 1px solid var(--line);
+        padding: 0 14px;
         display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .balls {
+        display: inline-flex;
         gap: 8px;
       }
 
@@ -170,182 +290,534 @@
         border-radius: 999px;
       }
 
-      .r { background: #ff6f7e; }
-      .y { background: #ffd36c; }
-      .g { background: #72f5b3; }
+      .b1 { background: #ff7e8b; }
+      .b2 { background: #ffd57b; }
+      .b3 { background: #7bf5b9; }
 
-      .preview-img {
-        width: 100%;
-        display: block;
+      .stage-label {
+        font-size: 12px;
+        color: #9eb0de;
       }
 
-      .section {
-        padding: 66px 0 8px;
+      .editor {
+        display: grid;
+        grid-template-columns: 250px 1fr;
+        min-height: 400px;
       }
 
-      .section h2 {
+      .editor-side {
+        border-right: 1px solid var(--line);
+        padding: 14px;
+        background: rgba(8, 13, 28, 0.72);
+      }
+
+      .file {
+        border: 1px solid transparent;
+        border-radius: 10px;
+        padding: 10px 10px;
+        font-size: 13px;
+        color: #bcc9ef;
+        margin-bottom: 8px;
+      }
+
+      .file.pin {
+        border-color: rgba(255, 200, 114, 0.52);
+        background: rgba(255, 187, 70, 0.14);
+        color: #ffe4b0;
+      }
+
+      .file.active {
+        border-color: rgba(142, 170, 255, 0.56);
+        background: rgba(96, 130, 255, 0.2);
+        color: #e5edff;
+      }
+
+      .editor-main {
+        padding: 18px 20px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .tool {
+        font-size: 12px;
+        color: #afbee8;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 9px;
+        padding: 4px 8px;
+      }
+
+      .line {
+        margin-top: 12px;
+        height: 14px;
+        border-radius: 8px;
+        background: linear-gradient(90deg, rgba(168, 187, 255, 0.95), rgba(95, 229, 255, 0.8));
+      }
+
+      .line.s2 { width: 86%; opacity: 0.85; }
+      .line.s3 { width: 76%; opacity: 0.7; }
+
+      .typing {
+        margin-top: 22px;
+        padding: 14px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(157, 184, 255, 0.28);
+        background: rgba(12, 22, 44, 0.72);
+        min-height: 70px;
+      }
+
+      .typing p {
         margin: 0;
-        font-size: clamp(28px, 4vw, 42px);
-        line-height: 1.1;
+        font-size: 15px;
+        color: #d4deff;
+        line-height: 1.8;
       }
 
-      .section p.lead {
+      .typing .cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1.1em;
+        margin-left: 3px;
+        background: #d8e4ff;
+        vertical-align: text-top;
+        animation: blink 0.9s steps(1, end) infinite;
+      }
+
+      @keyframes blink {
+        50% { opacity: 0; }
+      }
+
+      .section-title {
+        margin-top: 72px;
+      }
+
+      .section-title h2 {
+        margin: 0;
+        font-size: clamp(30px, 5vw, 56px);
+        letter-spacing: -0.7px;
+      }
+
+      .section-title p {
         margin: 12px 0 0;
         color: var(--muted);
-        font-size: 16px;
+        font-size: 17px;
       }
 
-      .bento {
-        margin-top: 24px;
+      .chapters {
+        margin-top: 18px;
+      }
+
+      .chapter {
+        min-height: 90vh;
         display: grid;
-        grid-template-columns: 1.25fr 1fr 1fr;
-        gap: 14px;
+        align-items: center;
       }
 
-      .tile {
-        border-radius: var(--radius-lg);
-        border: 1px solid var(--line);
-        background: var(--panel-2);
+      .chapter-shell {
+        position: sticky;
+        top: 96px;
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        gap: 18px;
+        border-radius: var(--radius-xl);
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        background: rgba(11, 17, 34, 0.82);
         overflow: hidden;
-        min-height: 250px;
       }
 
-      .tile.large {
-        grid-row: span 2;
-        min-height: 522px;
+      .chapter-left {
+        padding: 28px 24px;
+        border-right: 1px solid var(--line);
       }
 
-      .tile .img {
-        width: 100%;
-        display: block;
-        border-bottom: 1px solid var(--line);
+      .index {
+        font-family: "Times New Roman", Georgia, serif;
+        font-style: italic;
+        font-size: 62px;
+        color: transparent;
+        -webkit-text-stroke: 1px rgba(200, 216, 255, 0.52);
       }
 
-      .tile .content {
-        padding: 16px;
+      .chapter-left h3 {
+        margin: 10px 0 10px;
+        font-size: clamp(34px, 4.6vw, 54px);
+        line-height: 1.02;
+        letter-spacing: -0.6px;
       }
 
-      .tile h3 {
-        margin: 0 0 8px;
-        font-size: 20px;
-      }
-
-      .tile p {
+      .chapter-left p {
         margin: 0;
-        color: #c2ceef;
-        font-size: 14px;
-        line-height: 1.7;
+        color: #b5c3ec;
+        font-size: 17px;
+        line-height: 1.8;
+        max-width: 340px;
       }
 
-      .stats {
-        margin-top: 24px;
+      .chips {
+        margin-top: 16px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chips span {
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        font-size: 13px;
+        padding: 6px 11px;
+        color: #c8d5fb;
+      }
+
+      .chapter-right {
+        padding: 22px;
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        place-items: center;
+      }
+
+      .showcase {
+        width: min(560px, 100%);
+        aspect-ratio: 16/10;
+        border-radius: 16px;
+        border: 1px solid rgba(157, 184, 255, 0.25);
+        background: linear-gradient(150deg, rgba(23, 34, 66, 0.8), rgba(14, 21, 42, 0.88));
+        padding: 18px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .showcase::before {
+        content: "";
+        position: absolute;
+        width: 36%;
+        aspect-ratio: 1;
+        border-radius: 999px;
+        top: -24%;
+        right: -10%;
+        background: radial-gradient(circle, rgba(110, 144, 255, 0.34), transparent 72%);
+        filter: blur(16px);
+      }
+
+      .showcase-color .color-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      .showcase-color .tag {
+        font-size: 12px;
+        color: #becbf1;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 999px;
+        padding: 4px 10px;
+      }
+
+      .color-swatch {
+        display: inline-flex;
+        gap: 7px;
+      }
+
+      .color-swatch span {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+      }
+
+      .color-swatch span:nth-child(1) { background: #ff7f9f; }
+      .color-swatch span:nth-child(2) { background: #ffd883; }
+      .color-swatch span:nth-child(3) { background: #8af8c8; }
+      .color-swatch span:nth-child(4) { background: #7fb0ff; }
+      .color-swatch span:nth-child(5) { background: #7ce8ff; }
+
+      .paint-row {
+        margin-top: 10px;
+        border-radius: 12px;
+        border: 1px solid rgba(160, 188, 255, 0.25);
+        background: rgba(13, 21, 40, 0.72);
+        padding: 12px 12px;
+      }
+
+      .paint-row p {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.75;
+        color: #d9e4ff;
+      }
+
+      .paint-row .ink {
+        animation: colorShift 4s ease-in-out infinite;
+      }
+
+      .paint-row .hl {
+        padding: 0 6px;
+        border-radius: 6px;
+        animation: hlShift 4s ease-in-out infinite;
+      }
+
+      @keyframes colorShift {
+        0%, 100% { color: #9fb7ff; }
+        50% { color: #73e8ff; }
+      }
+
+      @keyframes hlShift {
+        0%, 100% { background: rgba(137, 110, 55, 0.65); color: #ffe7b2; }
+        50% { background: rgba(48, 104, 146, 0.62); color: #dcf6ff; }
+      }
+
+      .paint-bar {
+        margin-top: 12px;
+        height: 8px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #ff7f9f, #ffd883, #8af8c8, #7fb0ff, #7ce8ff);
+        background-size: 160% 100%;
+        animation: flowBar 3s linear infinite;
+      }
+
+      @keyframes flowBar {
+        0% { background-position: 0 0; }
+        100% { background-position: 160% 0; }
+      }
+
+      .showcase-theme .theme-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 10px;
       }
 
-      .stat {
-        border-radius: 12px;
-        border: 1px solid var(--line);
-        background: rgba(14, 20, 38, 0.65);
-        padding: 14px;
+      .theme-card {
+        border-radius: 11px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        height: 176px;
+        padding: 10px;
+        transform: translateY(0) scale(1);
+        transition: transform 0.35s ease;
+        animation: cardDrift 5s ease-in-out infinite;
       }
 
-      .stat strong {
-        font-size: 26px;
-        display: block;
+      .theme-card:nth-child(1) {
+        background: linear-gradient(150deg, #1b2f5d, #101a35);
       }
 
-      .stat span {
-        color: var(--muted);
+      .theme-card:nth-child(2) {
+        background: linear-gradient(150deg, #361a4b, #1c1430);
+        animation-delay: 0.6s;
+      }
+
+      .theme-card:nth-child(3) {
+        background: linear-gradient(150deg, #1f3941, #12252e);
+        animation-delay: 1.2s;
+      }
+
+      @keyframes cardDrift {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-5px) scale(1.01); }
+      }
+
+      .theme-card .title {
+        width: 68%;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(239, 246, 255, 0.86);
+      }
+
+      .theme-card .txt {
+        margin-top: 9px;
+        width: 88%;
+        height: 7px;
+        border-radius: 999px;
+        background: rgba(229, 239, 255, 0.45);
+      }
+
+      .theme-card .txt.s2 {
+        width: 70%;
+      }
+
+      .theme-caption {
+        margin-top: 12px;
+        display: flex;
+        justify-content: space-between;
         font-size: 13px;
+        color: #c6d5fc;
       }
 
-      .feature-list {
-        margin-top: 22px;
+      .showcase-lite .lite-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .ring {
+        width: 84px;
+        height: 84px;
+        border-radius: 50%;
+        border: 8px solid rgba(120, 170, 255, 0.2);
+        border-top-color: #82f6c0;
+        border-right-color: #7fc8ff;
+        animation: spin 2.8s linear infinite;
+      }
+
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+      .micro-bars {
+        flex: 1;
+        margin-left: 14px;
+      }
+
+      .micro-bars .m {
+        height: 9px;
+        border-radius: 999px;
+        margin-bottom: 8px;
+        background: linear-gradient(90deg, rgba(144, 170, 255, 0.9), rgba(112, 229, 255, 0.72));
+      }
+
+      .micro-bars .m.s2 { width: 78%; }
+      .micro-bars .m.s3 { width: 62%; }
+
+      .lite-grid {
+        margin-top: 14px;
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
+        gap: 8px;
       }
 
-      .f {
-        border-radius: 12px;
-        border: 1px solid var(--line);
-        background: rgba(14, 21, 42, 0.58);
-        padding: 14px;
+      .lite-grid div {
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(15, 25, 50, 0.74);
+        min-height: 90px;
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        color: #c9d6fc;
       }
 
-      .f h4 {
-        margin: 0 0 8px;
+      .contributors {
+        margin-top: 90px;
+        border-radius: var(--radius-xl);
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        background: rgba(10, 16, 31, 0.82);
+        padding: 30px 24px;
+      }
+
+      .contributors h3 {
+        margin: 0;
+        font-size: clamp(26px, 4vw, 40px);
+      }
+
+      .contributors p {
+        margin: 10px 0 0;
+        color: var(--muted);
         font-size: 16px;
       }
 
-      .f p {
-        margin: 0;
-        color: #c1cae7;
-        font-size: 14px;
-        line-height: 1.7;
-      }
-
-      .cta-panel {
-        margin: 54px 0 20px;
-        border-radius: var(--radius-xl);
-        border: 1px solid var(--line-strong);
-        background:
-          radial-gradient(820px 220px at 20% 0%, rgba(80, 118, 255, 0.2), transparent 65%),
-          radial-gradient(720px 250px at 90% 20%, rgba(67, 225, 255, 0.18), transparent 65%),
-          rgba(12, 18, 36, 0.88);
-        padding: 28px;
-      }
-
-      .cta-panel h3 {
-        margin: 0 0 10px;
-        font-size: 30px;
-      }
-
-      .cta-panel p {
-        margin: 0;
-        color: #c2ceef;
-        max-width: 760px;
-      }
-
-      .cta-panel .hero-cta {
+      .dev-grid {
         margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .dev {
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(15, 24, 49, 0.72);
+        padding: 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .dev img {
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .dev strong {
+        display: block;
+        font-size: 19px;
+      }
+
+      .dev span {
+        color: #aebee7;
+        font-size: 14px;
+      }
+
+      .dev a {
+        color: #b8c9ff;
       }
 
       footer {
-        padding: 42px 0 60px;
-        color: #95a6d7;
+        padding: 40px 0 58px;
+        color: #8f9fca;
         font-size: 13px;
       }
 
-      @media (max-width: 1080px) {
-        .bento {
-          grid-template-columns: 1fr 1fr;
+      .reveal {
+        opacity: 0;
+        transform: translateY(18px);
+        transition: opacity 0.7s ease, transform 0.7s ease;
+      }
+
+      .reveal.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @media (max-width: 960px) {
+        .hero-top,
+        .chapter-shell {
+          grid-template-columns: 1fr;
         }
-        .tile.large {
-          grid-column: span 2;
-          min-height: auto;
+
+        .poem {
+          justify-self: stretch;
+        }
+
+        .chapter-shell {
+          position: relative;
+          top: auto;
+        }
+
+        .chapter-left {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
         }
       }
 
-      @media (max-width: 760px) {
-        .stats,
-        .feature-list,
-        .bento {
+      @media (max-width: 700px) {
+        .editor {
           grid-template-columns: 1fr;
         }
-        .tile.large {
-          grid-column: auto;
+
+        .editor-side {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .dev-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .hero h1 {
+          letter-spacing: -0.5px;
         }
       }
     </style>
   </head>
   <body>
-    <header class="topbar">
-      <div class="wrap topbar-inner">
+    <header class="nav">
+      <div class="wrap nav-inner">
         <div class="brand"><span class="brand-dot"></span>PerfectMD</div>
-        <div class="actions">
+        <div class="btns">
           <a class="btn" href="https://github.com/ssbsunshengbo/perfectmd" target="_blank" rel="noopener noreferrer">GitHub</a>
           <a class="btn primary" href="https://github.com/ssbsunshengbo/perfectmd/releases" target="_blank" rel="noopener noreferrer">下载应用</a>
         </div>
@@ -354,118 +826,287 @@
 
     <main class="wrap">
       <section class="hero">
-        <div class="tag">简单、强大、专注写作</div>
-        <h1>为创作而生的现代 Markdown 编辑器</h1>
-        <p>
-          PerfectMD 融合了 Typora 式的沉浸编辑与现代产品叙事体验：
-          文字大小、颜色与背景高亮即时可调，代码和公式自然融入写作流程，
-          并支持文本级 PDF 导出，真正从草稿走到交付。
-        </p>
-        <div class="hero-cta">
-          <a class="btn primary" href="https://github.com/ssbsunshengbo/perfectmd/releases" target="_blank" rel="noopener noreferrer">立即体验</a>
-          <a class="btn" href="#features">查看核心功能</a>
-        </div>
-
-        <div class="hero-preview">
-          <div class="preview-head">
-            <span class="ball r"></span>
-            <span class="ball y"></span>
-            <span class="ball g"></span>
+        <div class="hero-top">
+          <div>
+            <div class="chip reveal">轻量 · 优雅 · 可定制</div>
+            <h1 class="reveal">
+              <span class="kicker">PerfectMD</span>
+              <span class="gradient-ink">Write Less Noise.</span>
+              <span class="outline-ink">Think More Clearly.</span>
+            </h1>
+            <p class="reveal">
+              一个真正为写作者设计的 Markdown 编辑器。
+              即时调节字号、文字颜色、背景高亮，搭配主题模板和自定义 CSS，
+              让内容与审美一起到位。
+            </p>
+            <div class="hero-cta reveal">
+              <a class="btn primary" href="https://github.com/ssbsunshengbo/perfectmd/releases" target="_blank" rel="noopener noreferrer">立即体验</a>
+              <a class="btn" href="#chapters">向下探索核心体验</a>
+            </div>
           </div>
-          <img class="preview-img" src="./assets/editor-showcase.svg" alt="PerfectMD 编辑器界面示意图" />
+
+          <aside class="poem reveal">
+            <p>
+              “不是每个编辑器都值得被称作创作工具。<br />
+              PerfectMD 把你从语法细枝末节中解放出来，<br />
+              让排版、主题、导出和分享成为一个自然流程。”
+            </p>
+          </aside>
+        </div>
+
+        <div class="hero-stage reveal" id="heroStage">
+          <div class="stage-head">
+            <div class="balls">
+              <span class="ball b1"></span>
+              <span class="ball b2"></span>
+              <span class="ball b3"></span>
+            </div>
+            <span class="stage-label">Live Editor Motion Demo</span>
+          </div>
+          <div class="editor">
+            <aside class="editor-side">
+              <div class="file pin">📌 发布说明.md</div>
+              <div class="file active">产品定位.md</div>
+              <div class="file">新版本路线图.md</div>
+              <div class="file">设计评审记录.md</div>
+              <div class="file">实验日志.md</div>
+            </aside>
+            <div class="editor-main">
+              <div class="toolbar">
+                <span class="tool">H1</span>
+                <span class="tool">Bold</span>
+                <span class="tool">Italic</span>
+                <span class="tool">Color</span>
+                <span class="tool">Highlight</span>
+                <span class="tool">Code</span>
+                <span class="tool">Formula</span>
+              </div>
+              <div class="line"></div>
+              <div class="line s2"></div>
+              <div class="line s3"></div>
+              <div class="typing"><p id="typingLine"></p></div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section class="section" id="features">
-        <h2>核心价值，不止“能写 Markdown”</h2>
-        <p class="lead">聚焦真正影响体验和效率的功能，而不是堆参数。</p>
-
-        <div class="bento">
-          <article class="tile large">
-            <img class="img" src="./assets/theme-gallery.svg" alt="多风格主题展示" />
-            <div class="content">
-              <h3>可视化样式控制 + 主题系统</h3>
-              <p>
-                字号、文字颜色、背景高亮、粗体、斜体、链接、inline code 在同一套编辑体验下即时生效。
-                你还可以通过模板和自定义 CSS 打造“炫酷”或“温和”的风格，满足个人写作与团队品牌规范。
-              </p>
-            </div>
-          </article>
-
-          <article class="tile">
-            <img class="img" src="./assets/lightweight.svg" alt="轻量级性能示意图" />
-            <div class="content">
-              <h3>轻量而高效</h3>
-              <p>本地优先、启动迅速、交互干净。把复杂留给功能，把注意力还给内容。</p>
-            </div>
-          </article>
-
-          <article class="tile">
-            <img class="img" src="./assets/pdf-export.svg" alt="PDF 导出功能示意图" />
-            <div class="content">
-              <h3>文本级 PDF 导出</h3>
-              <p>导出后的 PDF 支持文本复制，适合评审、汇报、归档与分享，不再是“截图式文档”。</p>
-            </div>
-          </article>
-
-          <article class="tile">
-            <div class="content">
-              <h3>技术写作全链路</h3>
-              <p>代码块语言高亮、公式编辑、目录结构、文档置顶与检索，覆盖技术文档常见场景。</p>
-            </div>
-          </article>
-
-          <article class="tile">
-            <div class="content">
-              <h3>跨平台交付</h3>
-              <p>macOS（Intel / Apple Silicon）、Windows、Linux 全平台可用，团队协作更顺畅。</p>
-            </div>
-          </article>
-        </div>
-
-        <div class="stats">
-          <div class="stat"><strong>WYSIWYG</strong><span>所见即所得编辑体验</span></div>
-          <div class="stat"><strong>CSS</strong><span>主题模板 + 自定义能力</span></div>
-          <div class="stat"><strong>PDF</strong><span>可复制文本级导出</span></div>
-          <div class="stat"><strong>Cross-OS</strong><span>桌面端全平台支持</span></div>
-        </div>
+      <section class="section-title reveal" id="chapters">
+        <h2>核心功能，用“章节”讲故事</h2>
+        <p>每次滚动聚焦一个能力：更少文字，更强画面感，更接近真实使用场景。</p>
       </section>
 
-      <section class="section">
-        <h2>你可以这样使用 PerfectMD</h2>
-        <p class="lead">围绕“写得快、改得顺、交付稳”设计的一条创作路径。</p>
-        <div class="feature-list">
-          <article class="f">
-            <h4>内容生产</h4>
-            <p>用富文本方式写 Markdown，减少语法噪音，保留结构化表达。</p>
-          </article>
-          <article class="f">
-            <h4>视觉编排</h4>
-            <p>通过主题与样式建立统一视觉，文档从草稿到成品一步到位。</p>
-          </article>
-          <article class="f">
-            <h4>对外交付</h4>
-            <p>导出 Markdown / PDF 给同事、客户、社区，兼顾可读性与可传播性。</p>
-          </article>
-        </div>
+      <section class="chapters">
+        <article class="chapter">
+          <div class="chapter-shell reveal">
+            <div class="chapter-left">
+              <div class="index">01</div>
+              <h3>文字样式，像画布一样可控</h3>
+              <p>字体大小、颜色、背景高亮实时生效，写作和排版同步完成。</p>
+              <div class="chips">
+                <span>Font Size</span><span>Text Color</span><span>Highlight</span>
+              </div>
+            </div>
+            <div class="chapter-right">
+              <div class="showcase showcase-color">
+                <div class="color-head">
+                  <span class="tag">Text Styling Playground</span>
+                  <div class="color-swatch">
+                    <span></span><span></span><span></span><span></span><span></span>
+                  </div>
+                </div>
+                <div class="paint-row">
+                  <p>为文档添加 <span class="ink">色彩层次</span>，并给重点词加 <span class="hl">高亮提示</span>。</p>
+                </div>
+                <div class="paint-row">
+                  <p>字号、粗体、斜体与链接，全部在写作流里自然衔接。</p>
+                </div>
+                <div class="paint-bar"></div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="chapter">
+          <div class="chapter-shell reveal">
+            <div class="chapter-left">
+              <div class="index">02</div>
+              <h3>主题系统：模板 + 自定义 CSS</h3>
+              <p>从冷静专业到创意张力，视觉风格自由切换，也可写专属主题。</p>
+              <div class="chips">
+                <span>Theme Presets</span><span>Custom CSS</span><span>Brand Style</span>
+              </div>
+            </div>
+            <div class="chapter-right">
+              <div class="showcase showcase-theme">
+                <div class="theme-grid">
+                  <div class="theme-card">
+                    <div class="title"></div>
+                    <div class="txt"></div>
+                    <div class="txt s2"></div>
+                    <div class="txt"></div>
+                  </div>
+                  <div class="theme-card">
+                    <div class="title"></div>
+                    <div class="txt"></div>
+                    <div class="txt s2"></div>
+                    <div class="txt"></div>
+                  </div>
+                  <div class="theme-card">
+                    <div class="title"></div>
+                    <div class="txt"></div>
+                    <div class="txt s2"></div>
+                    <div class="txt"></div>
+                  </div>
+                </div>
+                <div class="theme-caption">
+                  <span>Elegant · Creative · Calm</span>
+                  <span>Template + CSS</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="chapter">
+          <div class="chapter-shell reveal">
+            <div class="chapter-left">
+              <div class="index">03</div>
+              <h3>轻量，但能力完整</h3>
+              <p>代码高亮、公式、文档组织、文本级 PDF 导出，一条链路完成创作到交付。</p>
+              <div class="chips">
+                <span>Code + Math</span><span>Outline</span><span>Text PDF</span>
+              </div>
+            </div>
+            <div class="chapter-right">
+              <div class="showcase showcase-lite">
+                <div class="lite-head">
+                  <div class="ring"></div>
+                  <div class="micro-bars">
+                    <div class="m"></div>
+                    <div class="m s2"></div>
+                    <div class="m s3"></div>
+                  </div>
+                </div>
+                <div class="lite-grid">
+                  <div>Code Highlight</div>
+                  <div>Math Formula</div>
+                  <div>Text PDF</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
       </section>
 
-      <section class="cta-panel">
-        <h3>现在就开始构建你的专业写作工作流</h3>
-        <p>从个人笔记到团队文档库，PerfectMD 帮你用更现代、更顺手的方式完成 Markdown 创作。</p>
-        <div class="hero-cta">
-          <a class="btn primary" href="https://github.com/ssbsunshengbo/perfectmd/releases" target="_blank" rel="noopener noreferrer">下载最新版</a>
-          <a class="btn" href="https://github.com/ssbsunshengbo/perfectmd" target="_blank" rel="noopener noreferrer">查看开源仓库</a>
+      <section class="contributors reveal">
+        <h3>Contributors</h3>
+        <p>感谢以下开发者持续打磨 PerfectMD 体验。</p>
+        <div class="dev-grid">
+          <article class="dev">
+            <img src="https://github.com/ssbsunshengbo.png?size=120" alt="LeeSun avatar" />
+            <div>
+              <strong>LeeSun</strong>
+              <span><a href="https://github.com/ssbsunshengbo" target="_blank" rel="noopener noreferrer">@ssbsunshengbo</a></span>
+            </div>
+          </article>
+          <article class="dev">
+            <img src="https://github.com/LiuMengxuan04.png?size=120" alt="LiuMengxuan04 avatar" />
+            <div>
+              <strong>LiuMengXuan</strong>
+              <span><a href="https://github.com/LiuMengxuan04" target="_blank" rel="noopener noreferrer">@LiuMengxuan04</a></span>
+            </div>
+          </article>
         </div>
       </section>
     </main>
 
     <footer class="wrap">
-      <div>© <span id="year"></span> PerfectMD · Crafted for serious writing.</div>
+      © <span id="year"></span> PerfectMD · Crafted for elegant writing.
     </footer>
 
     <script>
       document.getElementById("year").textContent = String(new Date().getFullYear());
+
+      const revealEls = document.querySelectorAll(".reveal");
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("show");
+            }
+          });
+        },
+        { threshold: 0.16, rootMargin: "0px 0px -8% 0px" }
+      );
+      revealEls.forEach((el) => observer.observe(el));
+
+      const typingEl = document.getElementById("typingLine");
+      const textFrames = [
+        '把<span style="color:#9cb7ff">重点</span>写清楚，再把细节做优雅。',
+        '给关键词加<span style="background:#72542a;color:#ffe3a3;padding:0 4px;border-radius:4px">高亮</span>，让信息有层次。',
+        '代码、公式、段落，全部在一个流畅编辑面板里完成。'
+      ];
+      let frame = 0;
+      let pos = 0;
+      let deleting = false;
+      let rendered = "";
+
+      const plainFrames = textFrames.map((t) => t.replace(/<[^>]+>/g, ""));
+
+      function renderByCount(raw, count) {
+        const plain = raw.replace(/<[^>]+>/g, "");
+        if (count <= 0) return "";
+        let consumed = 0;
+        let out = "";
+        const tagRegex = /<[^>]+>|[^<]+/g;
+        const chunks = raw.match(tagRegex) || [];
+        for (const chunk of chunks) {
+          if (chunk.startsWith("<")) {
+            out += chunk;
+            continue;
+          }
+          const next = chunk.slice(0, Math.max(0, count - consumed));
+          out += next;
+          consumed += next.length;
+          if (consumed >= count) break;
+        }
+        return out;
+      }
+
+      function tickTyping() {
+        const currentRaw = textFrames[frame];
+        const currentPlain = plainFrames[frame];
+        if (!deleting) {
+          pos += 1;
+          rendered = renderByCount(currentRaw, pos);
+          typingEl.innerHTML = rendered + '<span class="cursor"></span>';
+          if (pos >= currentPlain.length) {
+            deleting = true;
+            setTimeout(tickTyping, 1200);
+            return;
+          }
+        } else {
+          pos -= 1;
+          rendered = renderByCount(currentRaw, pos);
+          typingEl.innerHTML = rendered + '<span class="cursor"></span>';
+          if (pos <= 0) {
+            deleting = false;
+            frame = (frame + 1) % textFrames.length;
+          }
+        }
+        setTimeout(tickTyping, deleting ? 34 : 54);
+      }
+      tickTyping();
+
+      const heroStage = document.getElementById("heroStage");
+      function onScrollParallax() {
+        const rect = heroStage.getBoundingClientRect();
+        const vh = window.innerHeight || 1;
+        const progress = Math.max(-1, Math.min(1, (vh * 0.5 - rect.top) / vh));
+        heroStage.style.transform = `translateY(${progress * -8}px)`;
+      }
+      window.addEventListener("scroll", onScrollParallax, { passive: true });
+      onScrollParallax();
     </script>
   </body>
 </html>
