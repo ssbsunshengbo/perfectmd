@@ -54,7 +54,7 @@
         aspect-ratio: 1;
         border-radius: 999px;
         filter: blur(70px);
-        opacity: 0.16;
+        opacity: 0.26;
         animation: floatGlow 16s ease-in-out infinite;
       }
 
@@ -74,6 +74,37 @@
       @keyframes floatGlow {
         0%, 100% { transform: translateY(0) scale(1); }
         50% { transform: translateY(-24px) scale(1.08); }
+      }
+
+      .ambient-glow {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      .ambient-glow::before,
+      .ambient-glow::after {
+        content: "";
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(52px);
+      }
+
+      .ambient-glow::before {
+        width: 28vw;
+        aspect-ratio: 1;
+        top: -8vw;
+        right: -8vw;
+        background: radial-gradient(circle, rgba(121, 152, 255, 0.35), transparent 70%);
+      }
+
+      .ambient-glow::after {
+        width: 24vw;
+        aspect-ratio: 1;
+        bottom: -7vw;
+        left: -6vw;
+        background: radial-gradient(circle, rgba(94, 229, 255, 0.28), transparent 70%);
       }
 
       a {
@@ -138,7 +169,7 @@
       .btn.primary {
         border-color: rgba(143, 171, 255, 0.5);
         background: linear-gradient(180deg, rgba(127, 159, 255, 0.3), rgba(84, 120, 255, 0.17));
-        box-shadow: 0 10px 30px rgba(71, 106, 245, 0.25);
+        box-shadow: 0 0 22px rgba(95, 149, 255, 0.35), 0 12px 34px rgba(71, 106, 245, 0.28);
       }
 
       .hero {
@@ -149,8 +180,10 @@
 
       .hero-top {
         display: grid;
-        grid-template-columns: 1.1fr 0.9fr;
+        grid-template-columns: 1fr;
         gap: 22px;
+        position: relative;
+        z-index: 1;
       }
 
       .chip {
@@ -163,6 +196,7 @@
         font-size: 13px;
         padding: 7px 12px;
         background: rgba(16, 57, 51, 0.36);
+        box-shadow: 0 0 28px rgba(113, 248, 192, 0.2);
       }
 
       .hero h1 {
@@ -188,6 +222,7 @@
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
+        filter: drop-shadow(0 0 18px rgba(120, 162, 255, 0.38));
       }
 
       .outline-ink {
@@ -195,6 +230,7 @@
         font-style: italic;
         color: transparent;
         -webkit-text-stroke: 1px rgba(205, 222, 255, 0.55);
+        filter: drop-shadow(0 0 12px rgba(168, 192, 255, 0.26));
       }
 
       .hero p {
@@ -212,58 +248,29 @@
         flex-wrap: wrap;
       }
 
-      .poem {
-        justify-self: end;
-        align-self: center;
-        width: min(420px, 100%);
-        border-radius: var(--radius-lg);
-        border: 1px solid rgba(184, 205, 255, 0.34);
-        background: linear-gradient(160deg, rgba(22, 35, 72, 0.62), rgba(12, 18, 36, 0.8));
-        padding: 20px 20px 22px;
-        position: relative;
-        overflow: hidden;
-      }
-
-      .poem::before {
-        content: "";
-        position: absolute;
-        inset: 8px;
-        border-radius: 14px;
-        border: 1px solid rgba(240, 246, 255, 0.16);
-        pointer-events: none;
-      }
-
-      .poem::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background:
-          radial-gradient(420px 80px at 10% -8%, rgba(119, 150, 255, 0.24), transparent 70%),
-          radial-gradient(420px 90px at 85% 110%, rgba(94, 229, 255, 0.18), transparent 70%);
-        pointer-events: none;
-      }
-
-      .poem p {
-        margin: 0;
-        font-size: 18px;
-        line-height: 2;
-        color: #e2ebff;
-        font-family: "Noto Serif SC", "Playfair Display", "Songti SC", serif;
-        font-weight: 600;
-        letter-spacing: 0.01em;
-        position: relative;
-        z-index: 1;
-      }
-
       .hero-stage {
         margin-top: 26px;
         border-radius: var(--radius-xl);
         border: 1px solid rgba(151, 178, 255, 0.24);
         background: rgba(11, 17, 34, 0.8);
         overflow: hidden;
-        box-shadow: 0 25px 90px rgba(3, 8, 28, 0.55);
+        box-shadow: 0 0 36px rgba(118, 152, 255, 0.18), 0 25px 90px rgba(3, 8, 28, 0.55);
         transform: translateY(0);
         transition: transform 0.45s ease;
+        position: relative;
+      }
+
+      .hero-stage::before {
+        content: "";
+        position: absolute;
+        width: 280px;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        right: -120px;
+        top: -120px;
+        background: radial-gradient(circle, rgba(124, 166, 255, 0.32), transparent 70%);
+        filter: blur(14px);
+        pointer-events: none;
       }
 
       .hero-stage:hover {
@@ -367,11 +374,12 @@
         border: 1px solid rgba(157, 184, 255, 0.28);
         background: rgba(12, 22, 44, 0.72);
         min-height: 70px;
+        box-shadow: inset 0 0 18px rgba(113, 158, 255, 0.15);
       }
 
       .typing p {
         margin: 0;
-        font-size: 15px;
+        font-size: 16px;
         color: #d4deff;
         line-height: 1.8;
       }
@@ -426,6 +434,7 @@
         border: 1px solid rgba(255, 255, 255, 0.13);
         background: rgba(11, 17, 34, 0.82);
         overflow: hidden;
+        box-shadow: 0 0 26px rgba(108, 141, 255, 0.14);
       }
 
       .chapter-left {
@@ -481,7 +490,7 @@
         width: min(560px, 100%);
         aspect-ratio: 16/10;
         border-radius: 16px;
-        border: 1px solid rgba(157, 184, 255, 0.25);
+        border: 1px solid rgba(157, 184, 255, 0.3);
         background: linear-gradient(150deg, rgba(23, 34, 66, 0.8), rgba(14, 21, 42, 0.88));
         padding: 18px;
         overflow: hidden;
@@ -496,7 +505,7 @@
         border-radius: 999px;
         top: -24%;
         right: -10%;
-        background: radial-gradient(circle, rgba(110, 144, 255, 0.34), transparent 72%);
+        background: radial-gradient(circle, rgba(110, 144, 255, 0.46), transparent 72%);
         filter: blur(16px);
       }
 
@@ -704,6 +713,7 @@
         border: 1px solid rgba(255, 255, 255, 0.13);
         background: rgba(10, 16, 31, 0.82);
         padding: 30px 24px;
+        box-shadow: 0 0 34px rgba(116, 151, 255, 0.18);
       }
 
       .contributors h3 {
@@ -732,6 +742,7 @@
         display: flex;
         align-items: center;
         gap: 12px;
+        box-shadow: inset 0 0 24px rgba(123, 157, 255, 0.09);
       }
 
       .dev img {
@@ -778,10 +789,6 @@
           grid-template-columns: 1fr;
         }
 
-        .poem {
-          justify-self: stretch;
-        }
-
         .chapter-shell {
           position: relative;
           top: auto;
@@ -826,6 +833,7 @@
 
     <main class="wrap">
       <section class="hero">
+        <div class="ambient-glow"></div>
         <div class="hero-top">
           <div>
             <div class="chip reveal">轻量 · 优雅 · 可定制</div>
@@ -845,13 +853,6 @@
             </div>
           </div>
 
-          <aside class="poem reveal">
-            <p>
-              “不是每个编辑器都值得被称作创作工具。<br />
-              PerfectMD 把你从语法细枝末节中解放出来，<br />
-              让排版、主题、导出和分享成为一个自然流程。”
-            </p>
-          </aside>
         </div>
 
         <div class="hero-stage reveal" id="heroStage">
@@ -1042,9 +1043,9 @@
 
       const typingEl = document.getElementById("typingLine");
       const textFrames = [
-        '把<span style="color:#9cb7ff">重点</span>写清楚，再把细节做优雅。',
-        '给关键词加<span style="background:#72542a;color:#ffe3a3;padding:0 4px;border-radius:4px">高亮</span>，让信息有层次。',
-        '代码、公式、段落，全部在一个流畅编辑面板里完成。'
+        'Clarity is not the <strong style="color:#ffdca1">absence</strong> of detail; it is the <span style="color:#8fb3ff">order</span> of thought.',
+        'Design is intelligence made <span style="background:#2a4a75;color:#dff5ff;padding:0 4px;border-radius:4px">visible</span>.',
+        'Write with <span style="color:#89f2c8;font-weight:700">purpose</span>, edit with patience, and let simplicity shine.'
       ];
       let frame = 0;
       let pos = 0;
@@ -1054,21 +1055,40 @@
       const plainFrames = textFrames.map((t) => t.replace(/<[^>]+>/g, ""));
 
       function renderByCount(raw, count) {
-        const plain = raw.replace(/<[^>]+>/g, "");
         if (count <= 0) return "";
         let consumed = 0;
         let out = "";
+        const openTags = [];
         const tagRegex = /<[^>]+>|[^<]+/g;
         const chunks = raw.match(tagRegex) || [];
         for (const chunk of chunks) {
           if (chunk.startsWith("<")) {
             out += chunk;
+            const tagMatch = chunk.match(/^<\/?([a-zA-Z0-9-]+)/);
+            if (tagMatch) {
+              const tagName = tagMatch[1].toLowerCase();
+              const isClose = /^<\//.test(chunk);
+              const isSelfClose = /\/>$/.test(chunk);
+              if (!isClose && !isSelfClose) {
+                openTags.push(tagName);
+              } else if (isClose) {
+                for (let i = openTags.length - 1; i >= 0; i -= 1) {
+                  if (openTags[i] === tagName) {
+                    openTags.splice(i, 1);
+                    break;
+                  }
+                }
+              }
+            }
             continue;
           }
           const next = chunk.slice(0, Math.max(0, count - consumed));
           out += next;
           consumed += next.length;
           if (consumed >= count) break;
+        }
+        for (let i = openTags.length - 1; i >= 0; i -= 1) {
+          out += `</${openTags[i]}>`;
         }
         return out;
       }
