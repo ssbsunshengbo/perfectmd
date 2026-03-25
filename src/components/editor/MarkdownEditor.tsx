@@ -584,7 +584,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
   }, [])
 
   // Replace a block element's tag (e.g. <p> → <h1>) while keeping its children
-  const convertBlockTag = useCallback((block: HTMLElement, newTag: string) => {
+  const convertBlockTag = useCallback((block: HTMLElement, newTag: string): HTMLElement => {
     const selection = window.getSelection()
     const newBlock = document.createElement(newTag)
 
@@ -604,6 +604,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       selection.removeAllRanges()
       selection.addRange(r)
     }
+    return newBlock
   }, [])
 
   const applyMarkdownShortcut = useCallback((e: React.KeyboardEvent): boolean => {
@@ -1597,7 +1598,24 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
   const exitCurrentBlockWithNewParagraph = useCallback((): boolean => {
     const selection = window.getSelection()
     if (!selection || !selection.rangeCount || !editorRef.current) return false
-    const currentBlock = getCurrentBlock(selection)
+    const listItem = getCurrentListItem()
+    if (listItem) {
+      const list = listItem.parentElement
+      if (!list || (list.tagName !== 'UL' && list.tagName !== 'OL')) return false
+      const newP = document.createElement('p')
+      newP.appendChild(document.createElement('br'))
+      list.parentNode?.insertBefore(newP, list.nextSibling)
+      const range = document.createRange()
+      range.selectNodeContents(newP)
+      range.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      savedRangeRef.current = range.cloneRange()
+      return true
+    }
+
+    const isolated = ensureIsolatedBlock()
+    const currentBlock = isolated || getCurrentBlock(selection)
     if (!currentBlock || currentBlock === editorRef.current) return false
 
     const newP = document.createElement('p')
@@ -1611,7 +1629,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     selection.addRange(range)
     savedRangeRef.current = range.cloneRange()
     return true
-  }, [getCurrentBlock])
+  }, [ensureIsolatedBlock, getCurrentBlock, getCurrentListItem])
 
   const getCurrentListItem = useCallback((): HTMLLIElement | null => {
     const selection = window.getSelection()
@@ -2365,7 +2383,21 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       }
       case 'heading': {
         const headingTag = `h${value || '1'}`
-        document.execCommand('formatBlock', false, `<${headingTag}>`)
+        const headingBlock = ensureIsolatedBlock() || getCurrentBlock(selection)
+        if (headingBlock && headingBlock !== editorRef.current) {
+          const newHeading = convertBlockTag(headingBlock, headingTag)
+          const next = newHeading.nextElementSibling
+          const shouldCreateParagraph =
+            !next ||
+            !['p', 'ul', 'ol', 'blockquote', 'pre', 'table', 'div'].includes(next.tagName.toLowerCase())
+          if (shouldCreateParagraph) {
+            const paragraph = document.createElement('p')
+            paragraph.appendChild(document.createElement('br'))
+            newHeading.parentNode?.insertBefore(paragraph, newHeading.nextSibling)
+          }
+        } else {
+          document.execCommand('formatBlock', false, `<${headingTag}>`)
+        }
         // Update format state
         setFormatState((prev) => ({ ...prev, heading: headingTag }))
         break
