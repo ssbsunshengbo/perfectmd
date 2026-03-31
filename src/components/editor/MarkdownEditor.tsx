@@ -509,11 +509,32 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     if (count <= 0 || !selection.rangeCount) return false
 
     const caretRange = selection.getRangeAt(0)
-    const endContainer = caretRange.endContainer
-    const endOffset = caretRange.endOffset
+    let endContainer: Node = caretRange.endContainer
+    let endOffset: number = caretRange.endOffset
 
+    // When caret is at element level (not text node), try to resolve to the
+    // preceding text node so we can reliably delete the trigger characters.
     if (endContainer.nodeType !== Node.TEXT_NODE) {
-      return false
+      if (endContainer.nodeType === Node.ELEMENT_NODE && endOffset > 0) {
+        // Walk into the last child of the node just before caret
+        let child: ChildNode | null = (endContainer as Element).childNodes[endOffset - 1]
+        while (child && child.nodeType !== Node.TEXT_NODE) {
+          if (child.nodeType === Node.ELEMENT_NODE && child.lastChild) {
+            child = child.lastChild
+          } else {
+            child = null
+            break
+          }
+        }
+        if (child && child.nodeType === Node.TEXT_NODE) {
+          endContainer = child
+          endOffset = (child as Text).length
+        } else {
+          return false
+        }
+      } else {
+        return false
+      }
     }
 
     if (endOffset < count) {
@@ -521,8 +542,8 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
 
     const deleteRange = document.createRange()
-    deleteRange.setStart(endContainer, endOffset - count)
-    deleteRange.setEnd(endContainer, endOffset)
+    deleteRange.setStart(endContainer as Text, endOffset - count)
+    deleteRange.setEnd(endContainer as Text, endOffset)
     deleteRange.deleteContents()
     return true
   }, [])
@@ -1607,8 +1628,26 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     const heading = element?.closest('h1, h2, h3, h4, h5, h6') as HTMLElement | null
     if (!heading || !editorRef.current.contains(heading)) return false
 
+    const caretRange = selection.getRangeAt(0)
+
+    // Extract any content after the caret position within the heading
+    const trailingRange = document.createRange()
+    trailingRange.setStart(caretRange.startContainer, caretRange.startOffset)
+    trailingRange.setEnd(heading, heading.childNodes.length)
+    const trailingFragment = trailingRange.extractContents()
+    const trailingText = (trailingFragment.textContent || '').replace(/\u200b/g, '').trim()
+
+    // Ensure heading retains a placeholder if it's now empty
+    if (!(heading.textContent || '').replace(/\u200b/g, '').trim()) {
+      heading.appendChild(document.createElement('br'))
+    }
+
     const paragraph = document.createElement('p')
-    paragraph.appendChild(document.createElement('br'))
+    if (trailingText.length > 0) {
+      paragraph.appendChild(trailingFragment)
+    } else {
+      paragraph.appendChild(document.createElement('br'))
+    }
     heading.parentNode?.insertBefore(paragraph, heading.nextSibling)
 
     const range = document.createRange()
@@ -1760,6 +1799,28 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
     const containerRect = editorRef.current.getBoundingClientRect()
     const imageRect = imageEl.getBoundingClientRect()
+    const width = imageRect.width || imageEl.naturalWidth
+    const height = imageRect.height || imageEl.naturalHeight
+
+    // Image not yet rendered - defer until it loads
+    if (width === 0 || height === 0) {
+      const editorEl = editorRef.current
+      imageEl.addEventListener('load', () => {
+        if (!editorEl || !imageEl.isConnected) return
+        const cr = editorEl.getBoundingClientRect()
+        const ir = imageEl.getBoundingClientRect()
+        if (ir.width > 0 && ir.height > 0) {
+          setImageOverlayRect({
+            top: ir.top - cr.top + editorEl.scrollTop + editorEl.offsetTop,
+            left: ir.left - cr.left + editorEl.scrollLeft + editorEl.offsetLeft,
+            width: ir.width,
+            height: ir.height,
+          })
+        }
+      }, { once: true })
+      return
+    }
+
     setImageOverlayRect({
       top: imageRect.top - containerRect.top + editorRef.current.scrollTop + editorRef.current.offsetTop,
       left: imageRect.left - containerRect.left + editorRef.current.scrollLeft + editorRef.current.offsetLeft,
@@ -1986,6 +2047,63 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     setImageOverlayRect(null)
     placeCaretFromPoint()
   }, [recalcSelectedImageOverlay])
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
+    const items = Array.from(e.clipboardData.items)
+    const imageItem = items.find((item) => item.type.startsWith('image/'))
+    if (!imageItem) return
+
+    e.preventDefault()
+    const file = imageItem.getAsFile()
+    if (!file || !editorRef.current) return
+
+    const reader = new FileReader()
+    reader.onload = (evt) => {
+      const dataUrl = evt.target?.result as string | undefined
+      if (!dataUrl || !editorRef.current) return
+
+      const img = document.createElement('img')
+      img.src = dataUrl
+      img.style.maxWidth = '100%'
+
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount) {
+        const range = selection.getRangeAt(0)
+        if (!range.collapsed) range.deleteContents()
+        range.insertNode(img)
+        const newRange = document.createRange()
+        newRange.setStartAfter(img)
+        newRange.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(newRange)
+      } else {
+        editorRef.current.appendChild(img)
+      }
+
+      handleInput()
+      setSelectedImage(img)
+      setEditingLink(null)
+      // Show overlay once image loads
+      const editorEl = editorRef.current
+      const showOverlay = () => {
+        if (!editorEl || !img.isConnected) return
+        const cr = editorEl.getBoundingClientRect()
+        const ir = img.getBoundingClientRect()
+        if (ir.width > 0 && ir.height > 0) {
+          setImageOverlayRect({
+            top: ir.top - cr.top + editorEl.scrollTop + editorEl.offsetTop,
+            left: ir.left - cr.left + editorEl.scrollLeft + editorEl.offsetLeft,
+            width: ir.width,
+            height: ir.height,
+          })
+        }
+      }
+      img.addEventListener('load', showOverlay, { once: true })
+      // Try immediately (for already-cached data URLs)
+      showOverlay()
+    }
+    reader.readAsDataURL(file)
+  }, [handleInput])
 
   const openExternalUrl = useCallback((href: string) => {
     const url = href.trim()
@@ -2745,6 +2863,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         contentEditable
         className="prose-editor relative flex-1 overflow-y-auto p-8 outline-none focus:outline-none"
         onInput={handleInput}
+        onPaste={handlePaste}
         onClick={handleEditorClick}
         onFocus={() => {
           const selection = window.getSelection()
