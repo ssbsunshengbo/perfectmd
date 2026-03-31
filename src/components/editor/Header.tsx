@@ -26,6 +26,57 @@ import {
 
 const CUSTOM_THEME_KEY = 'perfectmd-custom-theme-css'
 const CUSTOM_THEME_STYLE_ID = 'perfectmd-custom-theme-style'
+const TYPOGRAPHY_PARAMS_KEY = 'perfectmd-typography-params'
+const TYPOGRAPHY_PARAMS_STYLE_ID = 'perfectmd-typography-params-style'
+
+interface TypographyParams {
+  fontSize: number       // px
+  lineHeight: number     // ratio
+  paragraphSpacing: number // em, margin between paragraphs
+  letterSpacing: number  // em
+  h1Size: number         // em relative to base
+  h2Size: number
+  h3Size: number
+}
+
+const DEFAULT_TYPOGRAPHY: TypographyParams = {
+  fontSize: 17,
+  lineHeight: 1.68,
+  paragraphSpacing: 0.55,
+  letterSpacing: 0,
+  h1Size: 2.0,
+  h2Size: 1.5,
+  h3Size: 1.25,
+}
+
+const loadTypographyParams = (): TypographyParams => {
+  if (typeof window === 'undefined') return DEFAULT_TYPOGRAPHY
+  try {
+    const raw = localStorage.getItem(TYPOGRAPHY_PARAMS_KEY)
+    if (!raw) return DEFAULT_TYPOGRAPHY
+    const parsed = JSON.parse(raw) as Partial<TypographyParams>
+    return { ...DEFAULT_TYPOGRAPHY, ...parsed }
+  } catch {
+    return DEFAULT_TYPOGRAPHY
+  }
+}
+
+const buildTypographyCss = (p: TypographyParams) => `
+.prose-editor {
+  font-size: ${p.fontSize}px;
+  line-height: ${p.lineHeight};
+  letter-spacing: ${p.letterSpacing}em;
+}
+.prose-editor p {
+  line-height: ${p.lineHeight};
+  min-height: ${p.lineHeight}em;
+  margin-top: ${p.paragraphSpacing}em;
+  margin-bottom: ${p.paragraphSpacing}em;
+}
+.prose-editor h1 { font-size: ${p.h1Size}em; }
+.prose-editor h2 { font-size: ${p.h2Size}em; }
+.prose-editor h3 { font-size: ${p.h3Size}em; }
+`.trim()
 const FALLBACK_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev'
 const RELEASE_API_URL = 'https://api.github.com/repos/ssbsunshengbo/perfectmd/releases/latest'
 
@@ -343,6 +394,21 @@ export function Header() {
     typeof window !== 'undefined' ? localStorage.getItem(CUSTOM_THEME_KEY) || '' : ''
   )
   const [isThemeDialogOpen, setIsThemeDialogOpen] = useState(false)
+  const [themeDialogTab, setThemeDialogTab] = useState<'theme' | 'typography'>('theme')
+  const [typographyParams, setTypographyParams] = useState<TypographyParams>(() => loadTypographyParams())
+  const [typographyDraft, setTypographyDraft] = useState<TypographyParams>(() => loadTypographyParams())
+
+  const applyTypographyParams = useCallback((p: TypographyParams) => {
+    let styleEl = document.getElementById(TYPOGRAPHY_PARAMS_STYLE_ID) as HTMLStyleElement | null
+    const css = buildTypographyCss(p)
+    if (!styleEl) {
+      styleEl = document.createElement('style')
+      styleEl.id = TYPOGRAPHY_PARAMS_STYLE_ID
+      document.head.appendChild(styleEl)
+    }
+    styleEl.textContent = css
+  }, [])
+
   const selectedTemplate: 'none' | 'aurora' | 'paper' | 'cyber' | 'noir' | 'ocean' =
     customCssDraft.trim() === AURORA_TEMPLATE_CSS.trim()
       ? 'aurora'
@@ -383,6 +449,10 @@ export function Header() {
   useEffect(() => {
     applyCustomThemeCss(customCssDraft)
   }, [applyCustomThemeCss, customCssDraft])
+
+  useEffect(() => {
+    applyTypographyParams(typographyParams)
+  }, [applyTypographyParams, typographyParams])
 
   const openExternalUrl = useCallback(async (url: string) => {
     try {
@@ -529,6 +599,26 @@ export function Header() {
     toast.success('Custom theme CSS reset')
   }
 
+  const handleSaveTypography = () => {
+    localStorage.setItem(TYPOGRAPHY_PARAMS_KEY, JSON.stringify(typographyDraft))
+    setTypographyParams(typographyDraft)
+    applyTypographyParams(typographyDraft)
+    setIsThemeDialogOpen(false)
+    toast.success('排版参数已保存')
+  }
+
+  const handleResetTypography = () => {
+    localStorage.removeItem(TYPOGRAPHY_PARAMS_KEY)
+    setTypographyDraft(DEFAULT_TYPOGRAPHY)
+    setTypographyParams(DEFAULT_TYPOGRAPHY)
+    applyTypographyParams(DEFAULT_TYPOGRAPHY)
+    toast.success('排版参数已重置为默认值')
+  }
+
+  const updateTypoDraft = (key: keyof TypographyParams, value: number) => {
+    setTypographyDraft((prev) => ({ ...prev, [key]: value }))
+  }
+
   const handleApplyTemplate = (template: 'none' | 'aurora' | 'paper' | 'cyber' | 'noir' | 'ocean') => {
     if (template === 'none') {
       setCustomCssDraft('')
@@ -620,105 +710,281 @@ export function Header() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onClick={() => setIsThemeDialogOpen(true)}
+                onClick={() => { setThemeDialogTab('theme'); setIsThemeDialogOpen(true) }}
                 className="text-black data-[highlighted]:bg-black data-[highlighted]:text-white focus:bg-black focus:text-white"
               >
-                模板与自定义 CSS
+                外观主题
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => { setThemeDialogTab('typography'); setTypographyDraft(typographyParams); setIsThemeDialogOpen(true) }}
+                className="text-black data-[highlighted]:bg-black data-[highlighted]:text-white focus:bg-black focus:text-white"
+              >
+                排版参数
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
       </div>
 
-      <Dialog open={isThemeDialogOpen} onOpenChange={setIsThemeDialogOpen}>
+      <Dialog open={isThemeDialogOpen} onOpenChange={(open) => {
+        setIsThemeDialogOpen(open)
+        if (!open) setThemeDialogTab('theme')
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Theme Templates & Custom CSS</DialogTitle>
+            <DialogTitle>外观与排版</DialogTitle>
             <DialogDescription>
-              Choose a template or paste your custom CSS. Save to persist theme.
+              选择主题模板、自定义 CSS，或调整排版参数。
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3">
+
+          {/* Tab switcher */}
+          <div className="flex gap-1 rounded-lg border bg-muted p-1 w-fit">
             <button
               type="button"
-              onClick={() => handleApplyTemplate('aurora')}
-              className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'aurora' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
+              onClick={() => setThemeDialogTab('theme')}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${themeDialogTab === 'theme' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              <div
-                className="h-20 w-full rounded-md border"
-                style={{
-                  background:
-                    'radial-gradient(circle at 20% 10%, rgba(217,70,239,0.6), transparent 45%), radial-gradient(circle at 85% 15%, rgba(56,189,248,0.45), transparent 45%), linear-gradient(180deg, #0a0616 0%, #0e1327 50%, #100a1c 100%)',
-                }}
-              />
-              <div className="mt-2 text-sm font-medium">Aurora Elegant</div>
-              <div className="text-xs text-muted-foreground">High contrast + glow style</div>
+              外观主题
             </button>
             <button
               type="button"
-              onClick={() => handleApplyTemplate('paper')}
-              className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'paper' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
+              onClick={() => { setThemeDialogTab('typography'); setTypographyDraft(typographyParams) }}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${themeDialogTab === 'typography' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              <div className="h-20 w-full rounded-md border" style={{ background: 'linear-gradient(180deg,#fff8eb 0%,#f3e5cb 100%)' }} />
-              <div className="mt-2 text-sm font-medium">Paper Serif</div>
-              <div className="text-xs text-muted-foreground">Classic print / journal look</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleApplyTemplate('cyber')}
-              className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'cyber' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
-            >
-              <div className="h-20 w-full rounded-md border" style={{ background: 'linear-gradient(180deg,#05070f 0%,#0b1432 100%)' }} />
-              <div className="mt-2 text-sm font-medium">Cyber Grid</div>
-              <div className="text-xs text-muted-foreground">Neon contrast + futuristic lines</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleApplyTemplate('noir')}
-              className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'noir' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
-            >
-              <div className="h-20 w-full rounded-md border" style={{ background: 'linear-gradient(180deg,#0b0f18 0%,#1a2438 100%)' }} />
-              <div className="mt-2 text-sm font-medium">Noir Glass</div>
-              <div className="text-xs text-muted-foreground">Deep blue-black + glassy cards</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleApplyTemplate('ocean')}
-              className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'ocean' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
-            >
-              <div className="h-20 w-full rounded-md border" style={{ background: 'linear-gradient(180deg,#ddf3fb 0%,#f6fbfe 100%)' }} />
-              <div className="mt-2 text-sm font-medium">Ocean Pastel</div>
-              <div className="text-xs text-muted-foreground">Soft blue paper + calm reading mood</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleApplyTemplate('none')}
-              className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'none' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
-            >
-              <div
-                className="h-20 w-full rounded-md border bg-background"
-              />
-              <div className="mt-2 text-sm font-medium">Default</div>
-              <div className="text-xs text-muted-foreground">Use built-in app theme only</div>
+              排版参数
             </button>
           </div>
-          <Textarea
-            value={customCssDraft}
-            onChange={(e) => setCustomCssDraft(e.target.value)}
-            className="h-64 font-mono text-xs"
-            placeholder=":root { --pmd-code-bg: #0f172a; }"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={handleResetCustomTheme}>
-              Reset
-            </Button>
-            <Button variant="outline" onClick={() => setIsThemeDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveCustomTheme}>
-              Save Theme
-            </Button>
-          </DialogFooter>
+
+          {/* ── 外观主题 Tab ── */}
+          {themeDialogTab === 'theme' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleApplyTemplate('aurora')}
+                  className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'aurora' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
+                >
+                  <div
+                    className="h-20 w-full rounded-md border"
+                    style={{
+                      background:
+                        'radial-gradient(circle at 20% 10%, rgba(217,70,239,0.6), transparent 45%), radial-gradient(circle at 85% 15%, rgba(56,189,248,0.45), transparent 45%), linear-gradient(180deg, #0a0616 0%, #0e1327 50%, #100a1c 100%)',
+                    }}
+                  />
+                  <div className="mt-2 text-sm font-medium">Aurora Elegant</div>
+                  <div className="text-xs text-muted-foreground">High contrast + glow style</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyTemplate('paper')}
+                  className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'paper' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
+                >
+                  <div className="h-20 w-full rounded-md border" style={{ background: 'linear-gradient(180deg,#fff8eb 0%,#f3e5cb 100%)' }} />
+                  <div className="mt-2 text-sm font-medium">Paper Serif</div>
+                  <div className="text-xs text-muted-foreground">Classic print / journal look</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyTemplate('cyber')}
+                  className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'cyber' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
+                >
+                  <div className="h-20 w-full rounded-md border" style={{ background: 'linear-gradient(180deg,#05070f 0%,#0b1432 100%)' }} />
+                  <div className="mt-2 text-sm font-medium">Cyber Grid</div>
+                  <div className="text-xs text-muted-foreground">Neon contrast + futuristic lines</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyTemplate('noir')}
+                  className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'noir' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
+                >
+                  <div className="h-20 w-full rounded-md border" style={{ background: 'linear-gradient(180deg,#0b0f18 0%,#1a2438 100%)' }} />
+                  <div className="mt-2 text-sm font-medium">Noir Glass</div>
+                  <div className="text-xs text-muted-foreground">Deep blue-black + glassy cards</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyTemplate('ocean')}
+                  className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'ocean' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
+                >
+                  <div className="h-20 w-full rounded-md border" style={{ background: 'linear-gradient(180deg,#ddf3fb 0%,#f6fbfe 100%)' }} />
+                  <div className="mt-2 text-sm font-medium">Ocean Pastel</div>
+                  <div className="text-xs text-muted-foreground">Soft blue paper + calm reading mood</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyTemplate('none')}
+                  className={`rounded-lg border p-2 text-left transition ${selectedTemplate === 'none' ? 'border-primary ring-1 ring-primary/40' : 'hover:border-primary/50'}`}
+                >
+                  <div className="h-20 w-full rounded-md border bg-background" />
+                  <div className="mt-2 text-sm font-medium">Default</div>
+                  <div className="text-xs text-muted-foreground">Use built-in app theme only</div>
+                </button>
+              </div>
+              <Textarea
+                value={customCssDraft}
+                onChange={(e) => setCustomCssDraft(e.target.value)}
+                className="h-52 font-mono text-xs"
+                placeholder=":root { --pmd-code-bg: #0f172a; }"
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={handleResetCustomTheme}>重置</Button>
+                <Button variant="outline" onClick={() => setIsThemeDialogOpen(false)}>取消</Button>
+                <Button onClick={handleSaveCustomTheme}>保存主题</Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {/* ── 排版参数 Tab ── */}
+          {themeDialogTab === 'typography' && (
+            <>
+              <div className="space-y-5 py-1">
+                {/* Font Size */}
+                <div className="grid grid-cols-[1fr_auto] items-center gap-4">
+                  <div>
+                    <div className="text-sm font-medium">正文字号</div>
+                    <div className="text-xs text-muted-foreground">编辑区基础字体大小（px）</div>
+                    <input
+                      type="range"
+                      min={12}
+                      max={28}
+                      step={0.5}
+                      value={typographyDraft.fontSize}
+                      onChange={(e) => updateTypoDraft('fontSize', Number(e.target.value))}
+                      className="mt-2 w-full accent-primary"
+                    />
+                  </div>
+                  <input
+                    type="number"
+                    min={12}
+                    max={28}
+                    step={0.5}
+                    value={typographyDraft.fontSize}
+                    onChange={(e) => updateTypoDraft('fontSize', Number(e.target.value))}
+                    className="w-16 rounded border bg-background px-2 py-1 text-sm text-center"
+                  />
+                </div>
+
+                {/* Line Height */}
+                <div className="grid grid-cols-[1fr_auto] items-center gap-4">
+                  <div>
+                    <div className="text-sm font-medium">行高</div>
+                    <div className="text-xs text-muted-foreground">正文行间距倍数</div>
+                    <input
+                      type="range"
+                      min={1.2}
+                      max={2.4}
+                      step={0.02}
+                      value={typographyDraft.lineHeight}
+                      onChange={(e) => updateTypoDraft('lineHeight', Number(e.target.value))}
+                      className="mt-2 w-full accent-primary"
+                    />
+                  </div>
+                  <input
+                    type="number"
+                    min={1.2}
+                    max={2.4}
+                    step={0.02}
+                    value={typographyDraft.lineHeight}
+                    onChange={(e) => updateTypoDraft('lineHeight', Number(e.target.value))}
+                    className="w-16 rounded border bg-background px-2 py-1 text-sm text-center"
+                  />
+                </div>
+
+                {/* Paragraph Spacing */}
+                <div className="grid grid-cols-[1fr_auto] items-center gap-4">
+                  <div>
+                    <div className="text-sm font-medium">段落间距</div>
+                    <div className="text-xs text-muted-foreground">段落上下外边距（em）</div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1.5}
+                      step={0.05}
+                      value={typographyDraft.paragraphSpacing}
+                      onChange={(e) => updateTypoDraft('paragraphSpacing', Number(e.target.value))}
+                      className="mt-2 w-full accent-primary"
+                    />
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1.5}
+                    step={0.05}
+                    value={typographyDraft.paragraphSpacing}
+                    onChange={(e) => updateTypoDraft('paragraphSpacing', Number(e.target.value))}
+                    className="w-16 rounded border bg-background px-2 py-1 text-sm text-center"
+                  />
+                </div>
+
+                {/* Letter Spacing */}
+                <div className="grid grid-cols-[1fr_auto] items-center gap-4">
+                  <div>
+                    <div className="text-sm font-medium">字符间距</div>
+                    <div className="text-xs text-muted-foreground">字母/汉字间距（em）</div>
+                    <input
+                      type="range"
+                      min={-0.02}
+                      max={0.2}
+                      step={0.005}
+                      value={typographyDraft.letterSpacing}
+                      onChange={(e) => updateTypoDraft('letterSpacing', Number(e.target.value))}
+                      className="mt-2 w-full accent-primary"
+                    />
+                  </div>
+                  <input
+                    type="number"
+                    min={-0.02}
+                    max={0.2}
+                    step={0.005}
+                    value={typographyDraft.letterSpacing}
+                    onChange={(e) => updateTypoDraft('letterSpacing', Number(e.target.value))}
+                    className="w-16 rounded border bg-background px-2 py-1 text-sm text-center"
+                  />
+                </div>
+
+                {/* Heading sizes */}
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">标题字号（相对正文 em）</div>
+                  {(
+                    [
+                      { key: 'h1Size' as const, label: 'H1' },
+                      { key: 'h2Size' as const, label: 'H2' },
+                      { key: 'h3Size' as const, label: 'H3' },
+                    ] as const
+                  ).map(({ key, label }) => (
+                    <div key={key} className="grid grid-cols-[40px_1fr_auto] items-center gap-3">
+                      <span className="text-sm font-medium">{label}</span>
+                      <input
+                        type="range"
+                        min={1.0}
+                        max={3.0}
+                        step={0.05}
+                        value={typographyDraft[key]}
+                        onChange={(e) => updateTypoDraft(key, Number(e.target.value))}
+                        className="accent-primary"
+                      />
+                      <input
+                        type="number"
+                        min={1.0}
+                        max={3.0}
+                        step={0.05}
+                        value={typographyDraft[key]}
+                        onChange={(e) => updateTypoDraft(key, Number(e.target.value))}
+                        className="w-14 rounded border bg-background px-2 py-1 text-sm text-center"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={handleResetTypography}>重置默认</Button>
+                <Button variant="outline" onClick={() => setIsThemeDialogOpen(false)}>取消</Button>
+                <Button onClick={handleSaveTypography}>保存参数</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </header>
