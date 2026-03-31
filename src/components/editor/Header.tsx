@@ -395,18 +395,24 @@ export function Header() {
   )
   const [isThemeDialogOpen, setIsThemeDialogOpen] = useState(false)
   const [themeDialogTab, setThemeDialogTab] = useState<'theme' | 'typography'>('theme')
-  const [typographyParams, setTypographyParams] = useState<TypographyParams>(() => loadTypographyParams())
-  const [typographyDraft, setTypographyDraft] = useState<TypographyParams>(() => loadTypographyParams())
+  // Initialize with defaults; localStorage is loaded in useEffect after mount to avoid SSR issues
+  const [typographyParams, setTypographyParams] = useState<TypographyParams>(DEFAULT_TYPOGRAPHY)
+  const [typographyDraft, setTypographyDraft] = useState<TypographyParams>(DEFAULT_TYPOGRAPHY)
 
   const applyTypographyParams = useCallback((p: TypographyParams) => {
-    let styleEl = document.getElementById(TYPOGRAPHY_PARAMS_STYLE_ID) as HTMLStyleElement | null
-    const css = buildTypographyCss(p)
-    if (!styleEl) {
-      styleEl = document.createElement('style')
-      styleEl.id = TYPOGRAPHY_PARAMS_STYLE_ID
-      document.head.appendChild(styleEl)
+    if (typeof document === 'undefined') return
+    try {
+      let styleEl = document.getElementById(TYPOGRAPHY_PARAMS_STYLE_ID) as HTMLStyleElement | null
+      const css = buildTypographyCss(p)
+      if (!styleEl) {
+        styleEl = document.createElement('style')
+        styleEl.id = TYPOGRAPHY_PARAMS_STYLE_ID
+        document.head.appendChild(styleEl)
+      }
+      styleEl.textContent = css
+    } catch {
+      // Silently ignore DOM errors
     }
-    styleEl.textContent = css
   }, [])
 
   const selectedTemplate: 'none' | 'aurora' | 'paper' | 'cyber' | 'noir' | 'ocean' =
@@ -449,6 +455,15 @@ export function Header() {
   useEffect(() => {
     applyCustomThemeCss(customCssDraft)
   }, [applyCustomThemeCss, customCssDraft])
+
+  // Load typography params from localStorage after mount (client-only)
+  useEffect(() => {
+    const saved = loadTypographyParams()
+    setTypographyParams(saved)
+    setTypographyDraft(saved)
+    applyTypographyParams(saved)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally run only on mount
 
   useEffect(() => {
     applyTypographyParams(typographyParams)
