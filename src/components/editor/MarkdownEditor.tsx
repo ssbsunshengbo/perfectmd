@@ -282,22 +282,42 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       const nestedBlocks = Array.from(editor.querySelectorAll(
         'p > h1, p > h2, p > h3, p > h4, p > h5, p > h6'
       ))
-      for (const block of nestedBlocks) {
-        const parentP = block.parentElement
-        if (!parentP || parentP === editor || !parentP.parentNode) continue
-        // Only unwrap if the <p> contains no other significant content
-        const hasOtherContent = Array.from(parentP.childNodes).some((n) => {
-          if (n === block) return false
-          if (n.nodeType === Node.TEXT_NODE) return (n.textContent || '').trim().length > 0
-          if (n.nodeName === 'BR') return false
+      const hasMeaningfulParagraphContent = (p: HTMLParagraphElement) => {
+        return Array.from(p.childNodes).some((n) => {
+          if (n.nodeType === Node.TEXT_NODE) return (n.textContent || '').replace(/\u200b/g, '').trim().length > 0
+          if (n.nodeType !== Node.ELEMENT_NODE) return false
+          const tag = (n as HTMLElement).tagName.toLowerCase()
+          if (tag === 'br') return false
           return true
         })
-        if (!hasOtherContent) {
-          parentP.parentNode.insertBefore(block, parentP.nextSibling)
-          if (!(parentP.textContent || '').replace(/\u200b/g, '').trim()) {
-            parentP.remove()
+      }
+      for (const block of nestedBlocks) {
+        const heading = block as HTMLElement
+        const parentP = heading.parentElement as HTMLParagraphElement | null
+        if (!parentP || parentP === editor || !parentP.parentNode) continue
+        const parent = parentP.parentNode
+
+        const beforeP = document.createElement('p')
+        const afterP = document.createElement('p')
+        let passedHeading = false
+        const originalChildren = Array.from(parentP.childNodes)
+        for (const child of originalChildren) {
+          if (child === heading) {
+            passedHeading = true
+            continue
           }
+          if (passedHeading) afterP.appendChild(child)
+          else beforeP.appendChild(child)
         }
+
+        if (hasMeaningfulParagraphContent(beforeP)) {
+          parent.insertBefore(beforeP, parentP)
+        }
+        parent.insertBefore(heading, parentP)
+        if (hasMeaningfulParagraphContent(afterP)) {
+          parent.insertBefore(afterP, parentP)
+        }
+        parent.removeChild(parentP)
       }
 
       ensureCodeBlockControls(editor)
@@ -669,12 +689,17 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         return true
       }
 
-      if (/^\d+\.$/.test(currentLine)) {
+      const orderedMatch = currentLine.match(/^(\d+)[\.\．]$/)
+      if (orderedMatch) {
         e.preventDefault()
         if (!deleteMarkdownTrigger(selection, currentLine)) return false
         const listBlock = ensureIsolatedBlock()
         if (listBlock) {
           const ol = document.createElement('ol')
+          const start = Number(orderedMatch[1] || '1')
+          if (Number.isFinite(start) && start > 1) {
+            ol.start = start
+          }
           const li = document.createElement('li')
           li.appendChild(document.createElement('br'))
           ol.appendChild(li)
@@ -1723,6 +1748,23 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     return true
   }, [cleanupEmptyParagraphContainer, getCurrentListItem])
 
+  const resizeSelectedImageByFactor = useCallback((factor: number) => {
+    const image = selectedImage
+    if (!image || !Number.isFinite(factor) || factor <= 0) return
+    const rect = image.getBoundingClientRect()
+    const currentWidth = rect.width || image.naturalWidth || 160
+    const currentHeight = rect.height || image.naturalHeight || 90
+    const ratio = currentHeight > 0 ? currentWidth / currentHeight : 1
+    const nextWidth = Math.max(60, Math.min(2400, Math.round(currentWidth * factor)))
+    const nextHeight = Math.max(40, Math.round(nextWidth / (ratio || 1)))
+    image.style.width = `${nextWidth}px`
+    image.style.height = `${nextHeight}px`
+    image.removeAttribute('width')
+    image.removeAttribute('height')
+    recalcSelectedImageOverlay(image)
+    handleInput()
+  }, [handleInput, recalcSelectedImageOverlay, selectedImage])
+
   const removeSingleEmptyListAtCaret = useCallback((): boolean => {
     const selection = window.getSelection()
     if (!selection || !selection.rangeCount || !editorRef.current) return false
@@ -2571,6 +2613,20 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       return
     }
 
+    if ((e.metaKey || e.ctrlKey) && selectedImage) {
+      const key = e.key
+      if (key === '+' || key === '=' || key === 'Add') {
+        e.preventDefault()
+        resizeSelectedImageByFactor(1.1)
+        return
+      }
+      if (key === '-' || key === '_' || key === 'Subtract') {
+        e.preventDefault()
+        resizeSelectedImageByFactor(0.9)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && isSelectionInsideCodeBlock()) {
       e.preventDefault()
       insertNewLineInCodeBlock()
@@ -2675,7 +2731,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       e.preventDefault()
       document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;')
     }
-  }, [applyInlineMarkdownShortcut, applyMarkdownShortcut, applyStyle, clearColorTypingState, clearInlineTypingState, ensureCaretOutsideInlineFormatting, exitCurrentBlockWithNewParagraph, exitHeadingWithParagraph, handleInput, handleListEnter, insertNewLineInCodeBlock, insertSoftBreakAtCaret, isCaretInsideInlineFormatting, isCaretInsideList, isSelectionInsideCodeBlock, removeSingleEmptyListAtCaret, scrollCaretIntoView, selectedImage, splitParagraphAtCaret])
+  }, [applyInlineMarkdownShortcut, applyMarkdownShortcut, applyStyle, clearColorTypingState, clearInlineTypingState, ensureCaretOutsideInlineFormatting, exitCurrentBlockWithNewParagraph, exitHeadingWithParagraph, handleInput, handleListEnter, insertNewLineInCodeBlock, insertSoftBreakAtCaret, isCaretInsideInlineFormatting, isCaretInsideList, isSelectionInsideCodeBlock, removeSingleEmptyListAtCaret, resizeSelectedImageByFactor, scrollCaretIntoView, selectedImage, splitParagraphAtCaret])
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
@@ -2818,6 +2874,28 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
             height: `${imageOverlayRect.height}px`,
           }}
         >
+          <div className="pointer-events-auto absolute right-2 top-2 flex gap-1 rounded-md border border-border/60 bg-background/85 p-1 shadow">
+            <button
+              type="button"
+              className="h-6 w-6 rounded border border-border/60 text-xs leading-none hover:bg-muted"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => resizeSelectedImageByFactor(0.9)}
+              aria-label="缩小图片"
+              title="缩小 (Cmd/Ctrl + -)"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="h-6 w-6 rounded border border-border/60 text-xs leading-none hover:bg-muted"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => resizeSelectedImageByFactor(1.1)}
+              aria-label="放大图片"
+              title="放大 (Cmd/Ctrl + +)"
+            >
+              +
+            </button>
+          </div>
           {(['nw', 'ne', 'sw', 'se'] as const).map((corner) => (
             <button
               key={corner}
@@ -2887,8 +2965,8 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         }
         
         .prose-editor {
-          line-height: 1.55;
-          font-size: 16px;
+          line-height: 1.68;
+          font-size: 17px;
           --pmd-link-color: #3b82f6;
           --pmd-code-bg: var(--muted);
           --pmd-code-fg: var(--foreground);
@@ -3070,8 +3148,8 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         }
 
         .prose-editor p {
-          line-height: 1.5;
-          min-height: 1.5em;
+          line-height: 1.68;
+          min-height: 1.68em;
           white-space: pre-wrap;
           color: var(--foreground);
           caret-color: var(--foreground);
