@@ -1620,6 +1620,24 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     return true
   }, [])
 
+  const getCurrentListItem = useCallback((): HTMLLIElement | null => {
+    const selection = window.getSelection()
+    if (!selection || !selection.rangeCount || !editorRef.current) return null
+    const range = selection.getRangeAt(0)
+    const nodesToCheck: Array<Node | null> = [
+      selection.anchorNode,
+      selection.focusNode,
+      range.commonAncestorContainer,
+    ]
+    for (const node of nodesToCheck) {
+      const element = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node as HTMLElement | null
+      if (!element) continue
+      const li = element.closest('li') as HTMLLIElement | null
+      if (li && editorRef.current.contains(li)) return li
+    }
+    return null
+  }, [])
+
   const exitCurrentBlockWithNewParagraph = useCallback((): boolean => {
     const selection = window.getSelection()
     if (!selection || !selection.rangeCount || !editorRef.current) return false
@@ -1655,24 +1673,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     savedRangeRef.current = range.cloneRange()
     return true
   }, [ensureIsolatedBlock, getCurrentBlock, getCurrentListItem])
-
-  const getCurrentListItem = useCallback((): HTMLLIElement | null => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return null
-    const range = selection.getRangeAt(0)
-    const nodesToCheck: Array<Node | null> = [
-      selection.anchorNode,
-      selection.focusNode,
-      range.commonAncestorContainer,
-    ]
-    for (const node of nodesToCheck) {
-      const element = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node as HTMLElement | null
-      if (!element) continue
-      const li = element.closest('li') as HTMLLIElement | null
-      if (li && editorRef.current.contains(li)) return li
-    }
-    return null
-  }, [])
 
   const isCaretInsideList = useCallback((): boolean => {
     return !!getCurrentListItem()
@@ -1747,6 +1747,26 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     savedRangeRef.current = caret.cloneRange()
     return true
   }, [cleanupEmptyParagraphContainer, getCurrentListItem])
+
+  const recalcSelectedImageOverlay = useCallback((imageEl: HTMLImageElement | null = selectedImage) => {
+    if (!imageEl || !editorRef.current) {
+      setImageOverlayRect(null)
+      return
+    }
+    if (!imageEl.isConnected) {
+      setSelectedImage(null)
+      setImageOverlayRect(null)
+      return
+    }
+    const containerRect = editorRef.current.getBoundingClientRect()
+    const imageRect = imageEl.getBoundingClientRect()
+    setImageOverlayRect({
+      top: imageRect.top - containerRect.top + editorRef.current.scrollTop + editorRef.current.offsetTop,
+      left: imageRect.left - containerRect.left + editorRef.current.scrollLeft + editorRef.current.offsetLeft,
+      width: imageRect.width,
+      height: imageRect.height,
+    })
+  }, [selectedImage])
 
   const resizeSelectedImageByFactor = useCallback((factor: number) => {
     const image = selectedImage
@@ -1835,26 +1855,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       el.textContent = normalized
     }
   }, [])
-
-  const recalcSelectedImageOverlay = useCallback((imageEl: HTMLImageElement | null = selectedImage) => {
-    if (!imageEl || !editorRef.current) {
-      setImageOverlayRect(null)
-      return
-    }
-    if (!imageEl.isConnected) {
-      setSelectedImage(null)
-      setImageOverlayRect(null)
-      return
-    }
-    const containerRect = editorRef.current.getBoundingClientRect()
-    const imageRect = imageEl.getBoundingClientRect()
-    setImageOverlayRect({
-      top: imageRect.top - containerRect.top + editorRef.current.scrollTop + editorRef.current.offsetTop,
-      left: imageRect.left - containerRect.left + editorRef.current.scrollLeft + editorRef.current.offsetLeft,
-      width: imageRect.width,
-      height: imageRect.height,
-    })
-  }, [selectedImage])
 
   useEffect(() => {
     const editor = editorRef.current
