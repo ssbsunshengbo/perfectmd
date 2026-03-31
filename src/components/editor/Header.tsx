@@ -62,20 +62,15 @@ const loadTypographyParams = (): TypographyParams => {
 }
 
 const buildTypographyCss = (p: TypographyParams) => `
-.prose-editor {
-  font-size: ${p.fontSize}px;
-  line-height: ${p.lineHeight};
-  letter-spacing: ${p.letterSpacing}em;
+:root {
+  --pmd-base-font-size: ${p.fontSize}px;
+  --pmd-line-height: ${p.lineHeight};
+  --pmd-letter-spacing: ${p.letterSpacing}em;
+  --pmd-paragraph-spacing: ${p.paragraphSpacing}em;
+  --pmd-h1-size: ${p.h1Size}em;
+  --pmd-h2-size: ${p.h2Size}em;
+  --pmd-h3-size: ${p.h3Size}em;
 }
-.prose-editor p {
-  line-height: ${p.lineHeight};
-  min-height: ${p.lineHeight}em;
-  margin-top: ${p.paragraphSpacing}em;
-  margin-bottom: ${p.paragraphSpacing}em;
-}
-.prose-editor h1 { font-size: ${p.h1Size}em; }
-.prose-editor h2 { font-size: ${p.h2Size}em; }
-.prose-editor h3 { font-size: ${p.h3Size}em; }
 `.trim()
 const FALLBACK_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev'
 const RELEASE_API_URL = 'https://api.github.com/repos/ssbsunshengbo/perfectmd/releases/latest'

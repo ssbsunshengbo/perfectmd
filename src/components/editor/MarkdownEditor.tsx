@@ -2965,8 +2965,9 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         }
         
         .prose-editor {
-          line-height: 1.68;
-          font-size: 17px;
+          font-size: var(--pmd-base-font-size, 17px);
+          line-height: var(--pmd-line-height, 1.68);
+          letter-spacing: var(--pmd-letter-spacing, 0em);
           --pmd-link-color: #3b82f6;
           --pmd-code-bg: var(--muted);
           --pmd-code-fg: var(--foreground);
@@ -2977,6 +2978,12 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           --pmd-formula-bg: transparent;
           --pmd-formula-fg: var(--foreground);
           --pmd-formula-border: var(--border);
+        }
+        
+        .prose-editor p {
+          line-height: var(--pmd-line-height, 1.68);
+          margin-top: var(--pmd-paragraph-spacing, 0.55em);
+          margin-bottom: var(--pmd-paragraph-spacing, 0.55em);
         }
         
         /* Font size spans - maintain consistent line height */
@@ -2998,7 +3005,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         }
         
         .prose-editor h1 {
-          font-size: 2em;
+          font-size: var(--pmd-h1-size, 2em);
           font-weight: 700;
           margin-bottom: 0.5em;
           margin-top: 0.5em;
@@ -3007,7 +3014,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         }
         
         .prose-editor h2 {
-          font-size: 1.5em;
+          font-size: var(--pmd-h2-size, 1.5em);
           font-weight: 600;
           margin-bottom: 0.5em;
           margin-top: 0.5em;
@@ -3016,7 +3023,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         }
         
         .prose-editor h3 {
-          font-size: 1.25em;
+          font-size: var(--pmd-h3-size, 1.25em);
           font-weight: 600;
           margin-bottom: 0.5em;
           margin-top: 0.5em;
