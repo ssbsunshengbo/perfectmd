@@ -710,12 +710,14 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         return true
       }
 
-      const orderedMatch = currentLine.match(/^(\d+)[\.\．]$/)
+      const orderedMatch = currentLine.match(/^(\d+)[\.\．。]$/)
       if (orderedMatch) {
         e.preventDefault()
-        if (!deleteMarkdownTrigger(selection, currentLine)) return false
-        const listBlock = ensureIsolatedBlock()
-        if (listBlock) {
+        // Prefer replacing the isolated block directly. This is more robust than
+        // relying on text-node deletion, which can fail when caret container is
+        // element-level after browser normalization.
+        const listBlock = ensureIsolatedBlock() || block
+        if (listBlock && listBlock.parentNode) {
           const ol = document.createElement('ol')
           const start = Number(orderedMatch[1] || '1')
           if (Number.isFinite(start) && start > 1) {
@@ -731,6 +733,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           selection.removeAllRanges()
           selection.addRange(r)
         } else {
+          if (!deleteMarkdownTrigger(selection, currentLine)) return false
           document.execCommand('insertOrderedList', false)
         }
         handleInput()
@@ -2752,18 +2755,18 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       return
     }
 
-    if (e.key === 'Enter' && !e.shiftKey && handleListEnter()) {
-      e.preventDefault()
-      handleInput()
-      scrollCaretIntoView()
-      return
-    }
-
     if (e.key === 'Enter' && !e.shiftKey && exitHeadingWithParagraph()) {
       e.preventDefault()
       clearInlineTypingState()
       clearColorTypingState()
       shouldResetInlineTypingRef.current = false
+      handleInput()
+      scrollCaretIntoView()
+      return
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey && handleListEnter()) {
+      e.preventDefault()
       handleInput()
       scrollCaretIntoView()
       return
