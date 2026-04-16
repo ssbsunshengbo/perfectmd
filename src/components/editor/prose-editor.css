@@ -1,0 +1,343 @@
+.prose-editor:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+  position: absolute;
+  left: 2rem;
+  top: 2rem;
+}
+
+.prose-editor {
+  font-size: var(--pmd-base-font-size, 17px);
+  line-height: var(--pmd-line-height, 1.68);
+  letter-spacing: var(--pmd-letter-spacing, 0em);
+  --pmd-link-color: #3b82f6;
+  --pmd-code-bg: var(--muted);
+  --pmd-code-fg: var(--foreground);
+  --pmd-code-border: var(--border);
+  --pmd-table-border: var(--border);
+  --pmd-table-header-bg: var(--muted);
+  --pmd-table-cell-bg: transparent;
+  --pmd-formula-bg: transparent;
+  --pmd-formula-fg: var(--foreground);
+  --pmd-formula-border: var(--border);
+}
+
+.prose-editor p {
+  line-height: var(--pmd-line-height, 1.68);
+  margin-top: var(--pmd-paragraph-spacing, 0.55em);
+  margin-bottom: var(--pmd-paragraph-spacing, 0.55em);
+  min-height: 1.68em;
+  white-space: pre-wrap;
+  color: var(--foreground);
+  caret-color: var(--foreground);
+}
+
+.prose-editor .font-size-span {
+  display: inline;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+.prose-editor .inline-code,
+.prose-editor code {
+  background-color: rgba(135, 131, 120, 0.15);
+  color: #eb5757;
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-size: 85%;
+  border-radius: 3px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+}
+
+.prose-editor h1 {
+  font-size: var(--pmd-h1-size, 2em);
+  font-weight: 700;
+  margin-bottom: 0.5em;
+  margin-top: 0.5em;
+  color: var(--foreground);
+  line-height: 1.2;
+}
+
+.prose-editor h2 {
+  font-size: var(--pmd-h2-size, 1.5em);
+  font-weight: 600;
+  margin-bottom: 0.5em;
+  margin-top: 0.5em;
+  color: var(--foreground);
+  line-height: 1.3;
+}
+
+.prose-editor h3 {
+  font-size: var(--pmd-h3-size, 1.25em);
+  font-weight: 600;
+  margin-bottom: 0.5em;
+  margin-top: 0.5em;
+  color: var(--foreground);
+  line-height: 1.4;
+}
+
+.prose-editor pre {
+  background-color: var(--pmd-code-bg);
+  color: var(--pmd-code-fg);
+  border: 1px solid var(--pmd-code-border);
+  padding: 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  min-height: 3.2em;
+}
+
+.prose-editor .code-block-wrapper {
+  position: relative;
+  margin: 1em 0;
+}
+
+.prose-editor .code-block-wrapper pre {
+  margin: 0;
+  border-radius: 8px;
+}
+
+.prose-editor .code-controls {
+  position: absolute;
+  right: 0.75rem;
+  top: -0.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.28rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklch, var(--pmd-code-border) 86%, transparent);
+  background: color-mix(in oklch, var(--background) 92%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.prose-editor .code-copy-btn {
+  position: static;
+  height: 1.52rem;
+  min-width: 1.52rem;
+  border-radius: 999px;
+  border: 1px solid var(--pmd-code-border);
+  background: color-mix(in oklch, var(--background) 96%, transparent);
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  pointer-events: auto;
+  opacity: 0.95;
+}
+
+.prose-editor .code-lang-select {
+  position: static;
+  height: 1.55rem;
+  max-width: 8.6rem;
+  border: 1px solid var(--pmd-code-border);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--background) 95%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 0 0.6rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.prose-editor .code-copy-btn:hover {
+  color: var(--foreground);
+  border-color: var(--foreground);
+}
+
+.prose-editor .code-lang-select:hover,
+.prose-editor .code-lang-select:focus {
+  color: var(--foreground);
+  border-color: var(--foreground);
+}
+
+.prose-editor .code-copy-toast {
+  position: absolute;
+  right: 0.82rem;
+  top: 1.48rem;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  border-radius: 0.4rem;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 11px;
+  line-height: 1;
+  padding: 0.3rem 0.45rem;
+  transition: all 0.2s ease;
+}
+
+.prose-editor .code-copy-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.prose-editor pre code {
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: 1em;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 100%;
+  min-height: 1.45em;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.prose-editor pre code[data-highlighted='true'] .hljs {
+  background: transparent;
+}
+
+/* Prevent paragraph-box border/background leaking into headings */
+.prose-editor p:has(> h1, > h2, > h3, > h4, > h5, > h6) {
+  border: none !important;
+  background: none !important;
+  box-shadow: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.prose-editor blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1em;
+  color: var(--muted-foreground);
+  margin: 1em 0;
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 0.5em 1em;
+  border-radius: 0 4px 4px 0;
+}
+
+.dark .prose-editor blockquote {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.prose-editor ul,
+.prose-editor ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.prose-editor ul {
+  list-style-type: disc;
+}
+
+.prose-editor ol {
+  list-style-type: decimal;
+}
+
+.prose-editor li {
+  margin: 0.25em 0;
+  display: list-item;
+}
+
+.prose-editor ul ul {
+  list-style-type: circle;
+}
+
+.prose-editor ul ul ul {
+  list-style-type: square;
+}
+
+.prose-editor ol ol {
+  list-style-type: lower-alpha;
+}
+
+.prose-editor ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.prose-editor a {
+  color: var(--pmd-link-color);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.prose-editor hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+
+.prose-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.prose-editor table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+.prose-editor th,
+.prose-editor td {
+  border: 1px solid var(--pmd-table-border);
+  padding: 0.5em 1em;
+  background: var(--pmd-table-cell-bg);
+}
+
+.prose-editor th {
+  background-color: var(--pmd-table-header-bg);
+  font-weight: 600;
+}
+
+.prose-editor .formula-inline {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--pmd-formula-border);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+  margin: 0 0.1em;
+  color: var(--pmd-formula-fg);
+  background: var(--pmd-formula-bg);
+  cursor: pointer;
+}
+
+.prose-editor .formula-inline[data-empty='true'] {
+  opacity: 0.8;
+  border-style: dashed;
+}
+
+.prose-editor .formula-inline .katex {
+  color: var(--pmd-formula-fg);
+}
+
+.prose-editor .formula-inline-placeholder {
+  color: var(--muted-foreground);
+  font-size: 0.85em;
+}
+
+.prose-editor strong,
+.prose-editor b {
+  font-weight: 600;
+}
+
+.prose-editor em,
+.prose-editor i {
+  font-style: italic;
+}
+
+.prose-editor u {
+  text-decoration: underline;
+}
+
+.prose-editor s,
+.prose-editor strike,
+.prose-editor del {
+  text-decoration: line-through;
+}

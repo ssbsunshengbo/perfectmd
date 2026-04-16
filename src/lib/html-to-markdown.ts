@@ -252,12 +252,56 @@ export function htmlToMarkdown(html: string, title: string): string {
 }
 
 /**
- * Export document with proper encoding
+ * Convert a Blob to a data URL string.
  */
-export function downloadMarkdown(html: string, title: string): void {
-  const markdown = htmlToMarkdown(html, title)
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Failed to read blob'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+/**
+ * Resolve pmd-image:// references in HTML to data URLs for export.
+ */
+async function resolveImagesForExport(html: string): Promise<string> {
+  const { IMAGE_PROTOCOL, getImageBlob } = await import('@/store/editor-store')
+  const regex = new RegExp(`${IMAGE_PROTOCOL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([a-f0-9-]+)`, 'g')
+  const matches = [...html.matchAll(regex)]
+  if (matches.length === 0) return html
+
+  const uniqueIds = [...new Set(matches.map((m) => m[1]))]
+  const urlMap = new Map<string, string>()
+
+  for (const id of uniqueIds) {
+    try {
+      const stored = await getImageBlob(id)
+      if (stored) {
+        const dataUrl = await blobToDataUrl(stored.blob)
+        urlMap.set(id, dataUrl)
+      }
+    } catch {
+      // skip unresolvable images
+    }
+  }
+
+  let result = html
+  for (const [id, dataUrl] of urlMap) {
+    result = result.replaceAll(`${IMAGE_PROTOCOL}${id}`, dataUrl)
+  }
+  return result
+}
+
+/**
+ * Export document with proper encoding.
+ * Resolves pmd-image:// references to inline data URLs before converting.
+ */
+export async function downloadMarkdown(html: string, title: string): Promise<void> {
+  const resolvedHtml = await resolveImagesForExport(html)
+  const markdown = htmlToMarkdown(resolvedHtml, title)
   
-  // Create blob with UTF-8 encoding
   const blob = new Blob([markdown], { 
     type: 'text/markdown;charset=utf-8' 
   })

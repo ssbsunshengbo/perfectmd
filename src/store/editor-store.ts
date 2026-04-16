@@ -38,8 +38,11 @@ interface EditorState {
 // ===== IndexedDB Storage (inlined) =====
 
 const DB_NAME = 'MarkdownEditorDB'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = 'documents'
+const IMAGE_STORE_NAME = 'images'
+
+export const IMAGE_PROTOCOL = 'pmd-image://'
 
 const isBrowser = () => typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined'
 
@@ -49,17 +52,31 @@ const generateId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,
   return v.toString(16)
 })
 
+let dbInstance: IDBDatabase | null = null
+
 function openDB(): Promise<IDBDatabase> {
+  if (dbInstance) return Promise.resolve(dbInstance)
   return new Promise((resolve, reject) => {
     const request = window.indexedDB.open(DB_NAME, DB_VERSION)
     request.onerror = () => reject(new Error(`Failed to open database: ${request.error?.message}`))
-    request.onsuccess = () => resolve(request.result)
+    request.onsuccess = () => {
+      dbInstance = request.result
+      dbInstance.onclose = () => { dbInstance = null }
+      dbInstance.onversionchange = () => {
+        dbInstance?.close()
+        dbInstance = null
+      }
+      resolve(dbInstance)
+    }
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' })
         store.createIndex('isPinned', 'isPinned', { unique: false })
         store.createIndex('updatedAt', 'updatedAt', { unique: false })
+      }
+      if (!db.objectStoreNames.contains(IMAGE_STORE_NAME)) {
+        db.createObjectStore(IMAGE_STORE_NAME, { keyPath: 'id' })
       }
     }
   })
@@ -157,6 +174,112 @@ async function toggleDocPin(id: string): Promise<Document | null> {
 async function exportDocs(): Promise<string> {
   const documents = await getAllDocs()
   return JSON.stringify(documents, null, 2)
+}
+
+// ===== Image Blob Storage =====
+
+export interface StoredImage {
+  id: string
+  blob: Blob
+  mimeType: string
+}
+
+export async function saveImageBlob(id: string, blob: Blob, mimeType: string): Promise<void> {
+  if (!isBrowser()) return
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IMAGE_STORE_NAME, 'readwrite')
+    const store = tx.objectStore(IMAGE_STORE_NAME)
+    const request = store.put({ id, blob, mimeType })
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(new Error(`Failed to save image: ${request.error?.message}`))
+  })
+}
+
+export async function getImageBlob(id: string): Promise<StoredImage | null> {
+  if (!isBrowser()) return null
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IMAGE_STORE_NAME, 'readonly')
+    const store = tx.objectStore(IMAGE_STORE_NAME)
+    const request = store.get(id)
+    request.onsuccess = () => resolve(request.result || null)
+    request.onerror = () => reject(new Error(`Failed to get image: ${request.error?.message}`))
+  })
+}
+
+export async function deleteImageBlob(id: string): Promise<void> {
+  if (!isBrowser()) return
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IMAGE_STORE_NAME, 'readwrite')
+    const store = tx.objectStore(IMAGE_STORE_NAME)
+    const request = store.delete(id)
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(new Error(`Failed to delete image: ${request.error?.message}`))
+  })
+}
+
+export async function getAllImageIds(): Promise<string[]> {
+  if (!isBrowser()) return []
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IMAGE_STORE_NAME, 'readonly')
+    const store = tx.objectStore(IMAGE_STORE_NAME)
+    const request = store.getAllKeys()
+    request.onsuccess = () => resolve(request.result as string[])
+    request.onerror = () => reject(new Error(`Failed to list image IDs: ${request.error?.message}`))
+  })
+}
+
+/**
+ * Resolve all `pmd-image://{id}` references in HTML to Blob Object URLs.
+ * Returns the HTML with resolved URLs and a cleanup function to revoke them.
+ */
+export async function resolveImageReferences(html: string): Promise<{ html: string; revokeAll: () => void }> {
+  const objectUrls: string[] = []
+  const regex = new RegExp(`${IMAGE_PROTOCOL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([a-f0-9-]+)`, 'g')
+  const matches = [...html.matchAll(regex)]
+
+  if (matches.length === 0) return { html, revokeAll: () => {} }
+
+  const uniqueIds = [...new Set(matches.map((m) => m[1]))]
+  const urlMap = new Map<string, string>()
+
+  for (const id of uniqueIds) {
+    try {
+      const stored = await getImageBlob(id)
+      if (stored) {
+        const url = URL.createObjectURL(stored.blob)
+        objectUrls.push(url)
+        urlMap.set(id, url)
+      }
+    } catch {
+      // Image not found — leave the reference as is
+    }
+  }
+
+  let resolvedHtml = html
+  for (const [id, url] of urlMap) {
+    resolvedHtml = resolvedHtml.replaceAll(`${IMAGE_PROTOCOL}${id}`, url)
+  }
+
+  return {
+    html: resolvedHtml,
+    revokeAll: () => objectUrls.forEach((u) => URL.revokeObjectURL(u)),
+  }
+}
+
+/**
+ * Convert a data URL to a Blob and save it to IndexedDB.
+ * Returns the pmd-image:// reference ID.
+ */
+export async function storeDataUrlAsBlob(dataUrl: string): Promise<string> {
+  const id = generateId()
+  const response = await fetch(dataUrl)
+  const blob = await response.blob()
+  await saveImageBlob(id, blob, blob.type || 'image/png')
+  return id
 }
 
 async function importDocs(jsonData: string): Promise<number> {

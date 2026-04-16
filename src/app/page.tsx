@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import { useEditorStore } from '@/store/editor-store'
 import { MarkdownEditor } from '@/components/editor/MarkdownEditor'
 import { Sidebar } from '@/components/editor/Sidebar'
@@ -18,55 +18,46 @@ export default function Home() {
     saveDocument,
   } = useEditorStore()
 
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     fetchDocuments()
   }, [fetchDocuments])
 
-  // Auto-save with debounce (no toast notification)
   const handleContentChange = useCallback((content: string) => {
     updateCurrentContent(content)
-    
-    // Debounced auto-save without toast
-    if (saveTimeout) {
-      clearTimeout(saveTimeout)
-    }
-    
-    const timeout = setTimeout(async () => {
-      if (currentDocument) {
-        await saveDocument()
-        // No toast for auto-save - silent background save
-      }
-    }, 2000)
-    
-    setSaveTimeout(timeout)
-  }, [currentDocument, updateCurrentContent, saveDocument, saveTimeout])
 
-  // Export document with proper formatting
-  const handleExport = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      await saveDocument()
+    }, 2000)
+  }, [updateCurrentContent, saveDocument])
+
+  const handleExport = useCallback(async () => {
     if (!currentDocument) {
-      toast.error('No document to export')
+      toast.error('没有可导出的文档')
       return
     }
 
     try {
-      downloadMarkdown(currentDocument.content, currentDocument.title)
-      toast.success('Document exported successfully')
+      await downloadMarkdown(currentDocument.content, currentDocument.title)
+      toast.success('文档导出成功')
     } catch (error) {
       console.error('Export error:', error)
-      toast.error('Failed to export document')
+      toast.error('文档导出失败')
     }
   }, [currentDocument])
 
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
-      if (saveTimeout) {
-        clearTimeout(saveTimeout)
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
       }
     }
-  }, [saveTimeout])
+  }, [])
 
   return (
     <div className="flex h-screen flex-col">

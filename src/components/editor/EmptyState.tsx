@@ -17,14 +17,14 @@ export function EmptyState() {
         <FileText className="h-16 w-16 text-muted-foreground" />
       </div>
       <div className="text-center">
-        <h2 className="text-2xl font-semibold">No document selected</h2>
+        <h2 className="text-2xl font-semibold">未选择文档</h2>
         <p className="mt-2 text-muted-foreground">
-          Create a new document or select one from the sidebar
+          新建一篇文档，或从侧边栏选择已有文档
         </p>
       </div>
       <Button size="lg" onClick={handleCreate} className="gap-2">
         <Plus className="h-5 w-5" />
-        Create New Document
+        新建文档
       </Button>
     </div>
   )

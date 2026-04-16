@@ -4,8 +4,9 @@ import { useEditorStore } from '@/store/editor-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { FileText, Save, Palette, Download, FileDown } from 'lucide-react'
+import { FileText, Save, Palette, Download, FileDown, Moon, Sun } from 'lucide-react'
 import { saveAsMarkdown, exportAsPdf } from '@/lib/document-export'
+import { useTheme } from 'next-themes'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { open as openExternal } from '@tauri-apps/plugin-shell'
@@ -381,6 +382,7 @@ body {
 
 export function Header() {
   const { currentDocument, updateCurrentTitle, saveDocument } = useEditorStore()
+  const { theme, setTheme } = useTheme()
   const shownUpdateTagRef = useRef<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -554,7 +556,7 @@ export function Header() {
     if (!currentDocument) return
     setIsSaving(true)
     await saveDocument()
-    toast.success('Document saved')
+    toast.success('文档已保存')
     setTimeout(() => setIsSaving(false), 500)
   }, [currentDocument, saveDocument])
 
@@ -599,14 +601,14 @@ export function Header() {
     localStorage.setItem(CUSTOM_THEME_KEY, customCssDraft)
     applyCustomThemeCss(customCssDraft)
     setIsThemeDialogOpen(false)
-    toast.success('Custom theme CSS saved')
+    toast.success('自定义主题已保存')
   }
 
   const handleResetCustomTheme = () => {
     localStorage.removeItem(CUSTOM_THEME_KEY)
     setCustomCssDraft('')
     applyCustomThemeCss('')
-    toast.success('Custom theme CSS reset')
+    toast.success('自定义主题已重置')
   }
 
   const handleSaveTypography = () => {
@@ -634,7 +636,7 @@ export function Header() {
       setCustomCssDraft('')
       localStorage.removeItem(CUSTOM_THEME_KEY)
       applyCustomThemeCss('')
-      toast.success('Template cleared')
+      toast.success('模板已清除')
       return
     }
     const templates: Record<'aurora' | 'paper' | 'cyber' | 'noir' | 'ocean', { css: string; name: string }> = {
@@ -649,20 +651,20 @@ export function Header() {
     setCustomCssDraft(selected.css)
     localStorage.setItem(CUSTOM_THEME_KEY, selected.css)
     applyCustomThemeCss(selected.css)
-    toast.success(`${selected.name} template applied`)
+    toast.success(`${selected.name} 模板已应用`)
   }
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-3">
         <FileText className="h-6 w-6 text-primary" />
-        <h1 className="text-lg font-semibold">Markdown Editor</h1>
+        <h1 className="text-lg font-semibold">PerfectMD</h1>
         <span className="rounded border px-2 py-0.5 text-[11px] text-muted-foreground">
           {appVersion}
         </span>
         {currentDocument && (
           <span className="text-xs text-muted-foreground">
-            • {isSaving ? 'Saving...' : 'Auto-saved'}
+            • {isSaving ? '保存中...' : '已自动保存'}
           </span>
         )}
       </div>
@@ -674,8 +676,8 @@ export function Header() {
               value={currentDocument.title}
               onChange={handleTitleChange}
               onBlur={handleTitleBlur}
-              className="h-8 w-48 text-sm"
-              placeholder="Document title"
+              className="h-8 w-64 text-sm"
+              placeholder="文档标题"
             />
             <Button
               variant="outline"
@@ -685,7 +687,7 @@ export function Header() {
               className="gap-1"
             >
               <Save className="h-4 w-4" />
-              Save
+              保存
             </Button>
             <Button
               variant="outline"
@@ -711,11 +713,22 @@ export function Header() {
         )}
         
         {mounted && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            title={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+        )}
+        {mounted && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="gap-1">
                 <Palette className="h-4 w-4" />
-                Theme
+                主题
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

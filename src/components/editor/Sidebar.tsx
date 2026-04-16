@@ -25,7 +25,97 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
+
+function markdownTextToBasicHtml(md: string): string {
+  const lines = md.split('\n')
+  const htmlParts: string[] = []
+  let inCodeBlock = false
+  let codeLang = ''
+  let codeLines: string[] = []
+  let inList: 'ul' | 'ol' | null = null
+
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  const processInline = (text: string) => {
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/~~(.+?)~~/g, '<s>$1</s>')
+      .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+  }
+
+  const closeList = () => {
+    if (inList) {
+      htmlParts.push(inList === 'ul' ? '</ul>' : '</ol>')
+      inList = null
+    }
+  }
+
+  for (const line of lines) {
+    if (inCodeBlock) {
+      if (line.startsWith('```')) {
+        const codeContent = escapeHtml(codeLines.join('\n'))
+        htmlParts.push(
+          `<div class="code-block-wrapper" data-code-language="${codeLang || 'plaintext'}"><pre class="editor-code-block"><code data-language="${codeLang || 'plaintext'}">${codeContent}</code></pre></div>`
+        )
+        inCodeBlock = false
+        codeLines = []
+        codeLang = ''
+      } else {
+        codeLines.push(line)
+      }
+      continue
+    }
+
+    if (line.startsWith('```')) {
+      closeList()
+      inCodeBlock = true
+      codeLang = line.slice(3).trim()
+      continue
+    }
+
+    if (line.startsWith('# ')) { closeList(); htmlParts.push(`<h1>${processInline(line.slice(2))}</h1>`); continue }
+    if (line.startsWith('## ')) { closeList(); htmlParts.push(`<h2>${processInline(line.slice(3))}</h2>`); continue }
+    if (line.startsWith('### ')) { closeList(); htmlParts.push(`<h3>${processInline(line.slice(4))}</h3>`); continue }
+    if (line.startsWith('---') || line.startsWith('***')) { closeList(); htmlParts.push('<hr>'); continue }
+    if (line.startsWith('> ')) { closeList(); htmlParts.push(`<blockquote><p>${processInline(line.slice(2))}</p></blockquote>`); continue }
+
+    const ulMatch = line.match(/^[-*+]\s+(.*)/)
+    if (ulMatch) {
+      if (inList !== 'ul') { closeList(); htmlParts.push('<ul>'); inList = 'ul' }
+      htmlParts.push(`<li>${processInline(ulMatch[1])}</li>`)
+      continue
+    }
+
+    const olMatch = line.match(/^\d+[.．]\s+(.*)/)
+    if (olMatch) {
+      if (inList !== 'ol') { closeList(); htmlParts.push('<ol>'); inList = 'ol' }
+      htmlParts.push(`<li>${processInline(olMatch[1])}</li>`)
+      continue
+    }
+
+    closeList()
+    const trimmed = line.trim()
+    if (trimmed === '') {
+      htmlParts.push('<p><br></p>')
+    } else {
+      htmlParts.push(`<p>${processInline(trimmed)}</p>`)
+    }
+  }
+  closeList()
+  return htmlParts.join('')
+}
 
 interface SidebarProps {
   onExport: () => void
@@ -48,11 +138,17 @@ export function Sidebar({ onExport }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [viewMode, setViewMode] = useState<'documents' | 'outline'>('documents')
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const mdFileInputRef = useRef<HTMLInputElement>(null)
 
-  const filteredDocuments = documents.filter((doc) =>
-    doc.title.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredDocuments = documents.filter((doc) => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    if (doc.title.toLowerCase().includes(query)) return true
+    const plainText = (doc.content || '').replace(/<[^>]*>/g, '').toLowerCase()
+    return plainText.includes(query)
+  })
 
   const outlineHeadings = useMemo(() => {
     if (!currentDocument?.content) return []
@@ -72,9 +168,16 @@ export function Sidebar({ onExport }: SidebarProps) {
     setIsCreating(false)
   }
 
-  const handleDeleteDocument = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteDocument = (id: string, title: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    await deleteDocument(id)
+    setDeleteTarget({ id, title })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    await deleteDocument(deleteTarget.id)
+    toast.success('文档已删除')
+    setDeleteTarget(null)
   }
 
   const handleTogglePin = async (id: string, e: React.MouseEvent) => {
@@ -94,10 +197,10 @@ export function Sidebar({ onExport }: SidebarProps) {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      toast.success('Backup created successfully')
+      toast.success('备份创建成功')
     } catch (error) {
       console.error('Backup error:', error)
-      toast.error('Failed to create backup')
+      toast.error('备份创建失败')
     }
   }
 
@@ -112,12 +215,46 @@ export function Sidebar({ onExport }: SidebarProps) {
     try {
       const text = await file.text()
       const count = await importDocumentsFromJson(text)
-      toast.success(`Restored ${count} documents`)
+      toast.success(`已恢复 ${count} 篇文档`)
     } catch (error) {
       console.error('Restore error:', error)
-      toast.error('Failed to restore backup. Make sure the file is valid.')
+      toast.error('恢复备份失败，请确保文件格式正确')
     }
 
+    e.target.value = ''
+  }
+
+  const handleImportMarkdown = () => {
+    mdFileInputRef.current?.click()
+  }
+
+  const handleMdFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    let imported = 0
+    for (const file of Array.from(files)) {
+      try {
+        const text = await file.text()
+        const title = file.name.replace(/\.(md|txt|markdown)$/i, '') || '未命名'
+        const htmlContent = markdownTextToBasicHtml(text)
+        const doc = await createDocument()
+        if (doc) {
+          await useEditorStore.getState().updateCurrentTitle(title)
+          await useEditorStore.getState().updateCurrentContent(htmlContent)
+          await useEditorStore.getState().saveDocument()
+          imported++
+        }
+      } catch (error) {
+        console.error('Import markdown error:', error)
+      }
+    }
+    if (imported > 0) {
+      await useEditorStore.getState().fetchDocuments()
+      toast.success(`已导入 ${imported} 篇 Markdown 文档`)
+    } else {
+      toast.error('导入失败')
+    }
     e.target.value = ''
   }
 
@@ -182,10 +319,18 @@ export function Sidebar({ onExport }: SidebarProps) {
         accept=".json"
         className="hidden"
       />
+      <input
+        type="file"
+        ref={mdFileInputRef}
+        onChange={handleMdFileChange}
+        accept=".md,.txt,.markdown"
+        multiple
+        className="hidden"
+      />
 
       <div className="flex items-center justify-between border-b p-3">
         <h2 className="text-sm font-semibold">
-          {viewMode === 'documents' ? 'Documents' : 'Outline'}
+          {viewMode === 'documents' ? '文档' : '目录'}
         </h2>
         <div className="flex items-center gap-1">
           <DropdownMenu>
@@ -197,16 +342,20 @@ export function Sidebar({ onExport }: SidebarProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleBackup}>
                 <Download className="mr-2 h-4 w-4" />
-                Backup All Data
+                备份全部数据
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleRestore}>
                 <Upload className="mr-2 h-4 w-4" />
-                Restore from Backup
+                从备份恢复
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleImportMarkdown}>
+                <Upload className="mr-2 h-4 w-4" />
+                导入 Markdown 文件
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={onExport}>
                 <Download className="mr-2 h-4 w-4" />
-                Export Current Document
+                导出当前文档
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -231,7 +380,7 @@ export function Sidebar({ onExport }: SidebarProps) {
             onClick={() => setViewMode('documents')}
           >
             <FileText className="mr-1 h-3.5 w-3.5" />
-            Document
+            文档
           </Button>
           <Button
             variant={viewMode === 'outline' ? 'secondary' : 'ghost'}
@@ -251,7 +400,7 @@ export function Sidebar({ onExport }: SidebarProps) {
             <div className="relative">
               <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search documents..."
+                placeholder="搜索标题和内容..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-8 pl-8 text-sm"
@@ -268,7 +417,7 @@ export function Sidebar({ onExport }: SidebarProps) {
               disabled={isCreating}
             >
               <Plus className="h-4 w-4" />
-              New Document
+              新建文档
             </Button>
           </div>
 
@@ -276,7 +425,7 @@ export function Sidebar({ onExport }: SidebarProps) {
             <div className="space-y-1 py-2">
               {filteredDocuments.length === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">
-                  {searchQuery ? 'No documents found' : 'No documents yet'}
+                  {searchQuery ? '未找到匹配文档' : '暂无文档'}
                 </div>
               ) : (
                 filteredDocuments.map((doc) => (
@@ -297,8 +446,8 @@ export function Sidebar({ onExport }: SidebarProps) {
                         {doc.isPinned && (
                           <>
                             <Pin className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                            <span className="rounded bg-amber-200/80 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:bg-amber-700/40 dark:text-amber-200">
-                              Pinned
+                            <span className="rounded bg-amber-200/80 px-1 py-0.5 text-[10px] font-semibold tracking-wide text-amber-900 dark:bg-amber-700/40 dark:text-amber-200">
+                              置顶
                             </span>
                           </>
                         )}
@@ -328,23 +477,23 @@ export function Sidebar({ onExport }: SidebarProps) {
                           {doc.isPinned ? (
                             <>
                               <PinOff className="mr-2 h-4 w-4" />
-                              Unpin
+                              取消置顶
                             </>
                           ) : (
                             <>
                               <Pin className="mr-2 h-4 w-4" />
-                              Pin
+                              置顶
                             </>
                           )}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive"
                           onClick={(e) =>
-                            handleDeleteDocument(doc.id, e as unknown as React.MouseEvent)
+                            handleDeleteDocument(doc.id, doc.title, e as unknown as React.MouseEvent)
                           }
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
+                          删除
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -359,11 +508,11 @@ export function Sidebar({ onExport }: SidebarProps) {
           <div className="space-y-1 py-2">
             {!currentDocument ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
-                Select a document first
+                请先选择一篇文档
               </div>
             ) : outlineHeadings.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
-                No headings found (H1/H2/H3)
+                未找到标题（H1/H2/H3）
               </div>
             ) : (
               outlineHeadings.map((heading) => (
@@ -387,8 +536,29 @@ export function Sidebar({ onExport }: SidebarProps) {
       )}
 
       <div className="border-t p-2 text-xs text-muted-foreground">
-        {documents.length} document{documents.length !== 1 ? 's' : ''}
+        <div>共 {documents.length} 篇文档</div>
+        {currentDocument && (() => {
+          const text = (currentDocument.content || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+          const charCount = text.length
+          const wordCount = text ? text.split(/\s+/).length : 0
+          return <div>{charCount} 字符 · {wordCount} 词</div>
+        })()}
       </div>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+            <DialogDescription>
+              确定要删除「{deleteTarget?.title || '未命名'}」吗？此操作无法撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>取消</Button>
+            <Button variant="destructive" onClick={confirmDelete}>删除</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

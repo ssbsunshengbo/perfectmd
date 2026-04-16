@@ -15,199 +15,135 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { open as openExternal } from '@tauri-apps/plugin-shell'
-import hljs from 'highlight.js/lib/common'
+import './prose-editor.css'
+
+import {
+  type FormatState,
+  type EditingLink,
+  type EditorRefs,
+  DEFAULT_FORMAT_STATE,
+  DEFAULT_FONT_SIZE,
+  MIN_FONT_SIZE,
+  MAX_FONT_SIZE,
+  FONT_SIZE_STEP,
+} from './editor-types'
+import { useEditorSelection } from './use-editor-selection'
+import { useCodeBlocks } from './use-code-blocks'
+import { useBlockOperations } from './use-block-operations'
+import { useMarkdownShortcuts } from './use-markdown-shortcuts'
+import { useImageHandling } from './use-image-handling'
+import { IMAGE_PROTOCOL, getImageBlob } from '@/store/editor-store'
 
 interface MarkdownEditorProps {
   content: string
   onChange: (content: string) => void
 }
 
-interface FormatState {
-  heading: string | null // 'h1', 'h2', 'h3', or null
-  bold: boolean
-  italic: boolean
-  underline: boolean
-  strikethrough: boolean
-  bulletList: boolean
-  orderedList: boolean
-}
-
-const DEFAULT_FORMAT_STATE: FormatState = {
-  heading: null,
-  bold: false,
-  italic: false,
-  underline: false,
-  strikethrough: false,
-  bulletList: false,
-  orderedList: false,
-}
-
-// Font size steps for increase/decrease
-const FONT_SIZE_STEP = 4
-const MIN_FONT_SIZE = 10
-const MAX_FONT_SIZE = 72
-const DEFAULT_FONT_SIZE = 16
-const CODE_LANGUAGES = [
-  'plaintext',
-  'javascript',
-  'typescript',
-  'python',
-  'java',
-  'go',
-  'rust',
-  'json',
-  'bash',
-  'html',
-  'css',
-  'sql',
-]
-
 export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null)
   const savedRangeRef = useRef<Range | null>(null)
   const formulaTargetRef = useRef<HTMLElement | null>(null)
-  const resizeDragRef = useRef<{
-    startX: number
-    startWidth: number
-    startHeight: number
-    ratio: number
-    corner: 'se' | 'sw' | 'ne' | 'nw'
-  } | null>(null)
-  const [formatState, setFormatState] = useState<FormatState>(DEFAULT_FORMAT_STATE)
-  const [isFormulaDialogOpen, setIsFormulaDialogOpen] = useState(false)
-  const [formulaDraft, setFormulaDraft] = useState('')
-  const [editingLink, setEditingLink] = useState<{
-    element: HTMLAnchorElement | null
-    text: string
-    href: string
-    range: Range | null
-    position: { top: number; left: number }
-  } | null>(null)
-  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null)
-  const [imageOverlayRect, setImageOverlayRect] = useState<{
-    top: number
-    left: number
-    width: number
-    height: number
-  } | null>(null)
   const isInternalChange = useRef(false)
   const shouldResetInlineTypingRef = useRef(false)
   const isComposingRef = useRef(false)
+  const imageUrlMapRef = useRef<Map<string, string>>(new Map())
 
-  const normalizeCodeBlockToPlainText = useCallback((codeEl: HTMLElement) => {
-    const rawText = codeEl.textContent || ''
-    codeEl.textContent = rawText
-    codeEl.removeAttribute('data-highlighted')
-    codeEl.classList.remove('hljs')
+  const refs: EditorRefs = {
+    editorRef,
+    savedRangeRef,
+    isInternalChange,
+    shouldResetInlineTypingRef,
+    isComposingRef,
+  }
+
+  const [formatState, setFormatState] = useState<FormatState>(DEFAULT_FORMAT_STATE)
+  const [isFormulaDialogOpen, setIsFormulaDialogOpen] = useState(false)
+  const [formulaDraft, setFormulaDraft] = useState('')
+  const [isTableDialogOpen, setIsTableDialogOpen] = useState(false)
+  const [tableRows, setTableRows] = useState(3)
+  const [tableCols, setTableCols] = useState(3)
+  const [editingLink, setEditingLink] = useState<EditingLink | null>(null)
+
+  // Resolve pmd-image:// references in the editor DOM to displayable Object URLs
+  const resolveEditorImages = useCallback(async (editor: HTMLDivElement) => {
+    const images = Array.from(editor.querySelectorAll('img'))
+    for (const img of images) {
+      const src = img.getAttribute('src') || ''
+      if (!src.startsWith(IMAGE_PROTOCOL)) continue
+
+      const imageId = src.slice(IMAGE_PROTOCOL.length)
+      if (!imageId) continue
+
+      const existing = imageUrlMapRef.current.get(imageId)
+      if (existing) {
+        img.src = existing
+        continue
+      }
+
+      try {
+        const stored = await getImageBlob(imageId)
+        if (stored) {
+          const objectUrl = URL.createObjectURL(stored.blob)
+          imageUrlMapRef.current.set(imageId, objectUrl)
+          img.src = objectUrl
+        }
+      } catch {
+        // Image not found in DB — leave as is
+      }
+    }
   }, [])
 
-  const applySyntaxHighlight = useCallback((codeEl: HTMLElement, language: string, force = false) => {
-    const selection = window.getSelection()
-    if (!force && selection && selection.rangeCount) {
-      const anchor = selection.anchorNode
-      if (anchor && codeEl.contains(anchor)) {
-        normalizeCodeBlockToPlainText(codeEl)
-        return
-      }
+  // Convert Object URLs back to pmd-image:// references in HTML string
+  const serializeEditorContent = useCallback((html: string): string => {
+    let result = html
+    for (const [imageId, objectUrl] of imageUrlMapRef.current) {
+      result = result.replaceAll(objectUrl, `${IMAGE_PROTOCOL}${imageId}`)
     }
-    const rawText = codeEl.textContent || ''
-    if (!rawText.trim() || language === 'plaintext') {
-      normalizeCodeBlockToPlainText(codeEl)
-      return
-    }
-    try {
-      const highlighted = hljs.highlight(rawText, {
-        language,
-        ignoreIllegals: true,
-      }).value
-      codeEl.innerHTML = highlighted || rawText
-      codeEl.setAttribute('data-highlighted', 'true')
-      codeEl.classList.add('hljs')
-    } catch {
-      normalizeCodeBlockToPlainText(codeEl)
-    }
-  }, [normalizeCodeBlockToPlainText])
-
-  const renderCodeHighlights = useCallback((editor: HTMLDivElement, force = false) => {
-    const wrappers = editor.querySelectorAll('.code-block-wrapper')
-    wrappers.forEach((wrapper) => {
-      const codeEl = wrapper.querySelector('pre code') as HTMLElement | null
-      if (!codeEl) return
-      const langSelect = wrapper.querySelector('[data-code-lang-select="true"]') as HTMLSelectElement | null
-      const lang = (langSelect?.value || wrapper.getAttribute('data-code-language') || 'plaintext').toLowerCase()
-      wrapper.setAttribute('data-code-language', lang)
-      codeEl.setAttribute('data-language', lang)
-      applySyntaxHighlight(codeEl, lang, force)
-    })
-  }, [applySyntaxHighlight])
-
-  const ensureCodeBlockControls = useCallback((editor: HTMLDivElement) => {
-    const wrappers = editor.querySelectorAll('.code-block-wrapper')
-    wrappers.forEach((wrapper) => {
-      const codeEl = wrapper.querySelector('pre.editor-code-block code') as HTMLElement | null
-      if (!codeEl) {
-        wrapper.querySelectorAll('.code-controls, .code-copy-toast').forEach((node) => node.remove())
-        return
-      }
-      let controls = wrapper.querySelector('.code-controls') as HTMLDivElement | null
-      if (!controls) {
-        controls = document.createElement('div')
-        controls.className = 'code-controls'
-        controls.setAttribute('contenteditable', 'false')
-        wrapper.appendChild(controls)
-      }
-
-      let langSelect = controls.querySelector('[data-code-lang-select="true"]') as HTMLSelectElement | null
-      if (!langSelect) {
-        langSelect = document.createElement('select')
-        langSelect.className = 'code-lang-select'
-        langSelect.setAttribute('contenteditable', 'false')
-        langSelect.setAttribute('data-code-lang-select', 'true')
-        CODE_LANGUAGES.forEach((lang) => {
-          const option = document.createElement('option')
-          option.value = lang
-          option.textContent = lang
-          langSelect?.appendChild(option)
-        })
-        controls.appendChild(langSelect)
-      }
-      const currentLang = (wrapper.getAttribute('data-code-language') || 'plaintext').toLowerCase()
-      if (CODE_LANGUAGES.includes(currentLang)) {
-        langSelect.value = currentLang
-      } else {
-        langSelect.value = 'plaintext'
-        wrapper.setAttribute('data-code-language', 'plaintext')
-      }
-      let copyBtn = controls.querySelector('[data-copy-code-btn="true"]') as HTMLButtonElement | null
-      if (!copyBtn) {
-        copyBtn = document.createElement('button')
-        copyBtn.type = 'button'
-        copyBtn.draggable = false
-        copyBtn.className = 'code-copy-btn'
-        copyBtn.setAttribute('contenteditable', 'false')
-        copyBtn.setAttribute('data-copy-code-btn', 'true')
-        copyBtn.title = 'Copy code'
-        copyBtn.innerHTML = '⧉'
-        controls.appendChild(copyBtn)
-      }
-      let copyToast = wrapper.querySelector('.code-copy-toast') as HTMLSpanElement | null
-      if (!copyToast) {
-        copyToast = document.createElement('span')
-        copyToast.className = 'code-copy-toast'
-        copyToast.setAttribute('contenteditable', 'false')
-        copyToast.textContent = '复制成功'
-        wrapper.appendChild(copyToast)
-      }
-    })
+    return result
   }, [])
 
-  // Handle input changes
+  // Cleanup Object URLs on unmount
+  useEffect(() => {
+    return () => {
+      for (const url of imageUrlMapRef.current.values()) {
+        URL.revokeObjectURL(url)
+      }
+      imageUrlMapRef.current.clear()
+    }
+  }, [])
+
+  // --- Selection & DOM utilities ---
+  const {
+    restoreSavedSelection,
+    scrollCaretIntoView,
+    ensureReadyCaretForEmptyEditor,
+    getTextBeforeCaretInBlock,
+    getCurrentBlock,
+    deleteMarkdownTrigger,
+    ensureIsolatedBlock,
+    convertBlockTag,
+    selectElement,
+    isSelectionInsideHeading,
+    isSelectionInsideCodeBlock,
+    ensureCaretOutsideInlineFormatting,
+    isCaretInsideInlineFormatting,
+    getCurrentListItem,
+    getCurrentTableCell,
+  } = useEditorSelection(refs)
+
+  // --- Code block highlighting & controls ---
+  const {
+    applySyntaxHighlight,
+    renderCodeHighlights,
+    ensureCodeBlockControls,
+    insertNewLineInCodeBlock,
+    insertCodeBlockAtCaret,
+  } = useCodeBlocks(refs)
+
+  // --- handleInput: normalizes DOM + triggers onChange ---
   const handleInput = useCallback(() => {
     if (editorRef.current) {
       const editor = editorRef.current
-      // Remove invisible ZWS anchors left by previous editing logic.
-      // They cause double-backspace deletion and oversized caret rendering
-      // after soft line breaks on some platforms.
       const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
       const textNodes: Text[] = []
       let current: Node | null = walker.nextNode()
@@ -276,9 +212,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         }
       }
 
-      // Unwrap headings that ended up inside <p>.
-      // We intentionally keep lists inside paragraph blocks for the "paragraph box"
-      // editing experience.
       const nestedBlocks = Array.from(editor.querySelectorAll(
         'p > h1, p > h2, p > h3, p > h4, p > h5, p > h6'
       ))
@@ -323,436 +256,23 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       ensureCodeBlockControls(editor)
 
       isInternalChange.current = true
-      const newContent = editor.innerHTML
+      const newContent = serializeEditorContent(editor.innerHTML)
       onChange(newContent)
     }
-  }, [ensureCodeBlockControls, onChange])
+  }, [ensureCodeBlockControls, onChange, serializeEditorContent])
 
-  const scrollCaretIntoView = useCallback(() => {
-    requestAnimationFrame(() => {
-      const selection = window.getSelection()
-      if (!selection || !selection.rangeCount) return
-      const anchorNode = selection.anchorNode
-      const element = anchorNode?.nodeType === Node.TEXT_NODE
-        ? anchorNode.parentElement
-        : anchorNode as HTMLElement | null
-      element?.scrollIntoView({ block: 'nearest' })
-    })
-  }, [])
+  // --- Block operations (split paragraph, list enter, etc.) ---
+  const {
+    insertSoftBreakAtCaret,
+    splitParagraphAtCaret,
+    exitHeadingWithParagraph,
+    exitCurrentBlockWithNewParagraph,
+    isCaretInsideList,
+    handleListEnter,
+    removeSingleEmptyListAtCaret,
+  } = useBlockOperations(refs, { getCurrentBlock, ensureIsolatedBlock, getCurrentListItem })
 
-  const restoreSavedSelection = useCallback((): Selection | null => {
-    const selection = window.getSelection()
-    const editor = editorRef.current
-    if (!selection || !editor) return null
-
-    if (selection.rangeCount > 0 && editor.contains(selection.getRangeAt(0).commonAncestorContainer)) {
-      savedRangeRef.current = selection.getRangeAt(0).cloneRange()
-      return selection
-    }
-
-    if (savedRangeRef.current) {
-      selection.removeAllRanges()
-      selection.addRange(savedRangeRef.current.cloneRange())
-      return selection
-    }
-
-    editor.focus()
-    const range = document.createRange()
-    range.selectNodeContents(editor)
-    range.collapse(false)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    savedRangeRef.current = range.cloneRange()
-    return selection
-  }, [])
-
-  const ensureReadyCaretForEmptyEditor = useCallback(() => {
-    const editor = editorRef.current
-    const selection = window.getSelection()
-    if (!editor || !selection) return
-
-    if (!editor.innerHTML.trim()) {
-      editor.innerHTML = '<p><br></p>'
-    }
-
-    const firstParagraph = editor.querySelector('p') as HTMLParagraphElement | null
-    const targetBlock = firstParagraph || editor
-    const textNode = Array.from(targetBlock.childNodes).find((node) => node.nodeType === Node.TEXT_NODE) as Text | undefined
-
-    const range = document.createRange()
-    if (textNode) {
-      range.setStart(textNode, 0)
-    } else if (targetBlock.firstChild) {
-      range.setStart(targetBlock, 0)
-    } else {
-      const anchor = document.createTextNode('')
-      targetBlock.appendChild(anchor)
-      range.setStart(anchor, 0)
-    }
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    savedRangeRef.current = range.cloneRange()
-  }, [])
-
-  const getTextBeforeCaretInBlock = useCallback((block: HTMLElement, selection: Selection): string => {
-    if (!selection.rangeCount) return ''
-    const range = selection.getRangeAt(0).cloneRange()
-    const textRange = document.createRange()
-    textRange.selectNodeContents(block)
-    textRange.setEnd(range.endContainer, range.endOffset)
-    return textRange.toString().replace(/\u00a0/g, ' ')
-  }, [])
-
-  const getCurrentBlock = useCallback((selection: Selection): HTMLElement | null => {
-    const anchor = selection.anchorNode
-    if (!anchor || !editorRef.current) return null
-    const element = anchor.nodeType === Node.ELEMENT_NODE ? anchor as Element : anchor.parentElement
-    if (!element) return null
-    const block = element.closest('p, div, h1, h2, h3, h4, h5, h6, blockquote, li')
-    if (!block || !editorRef.current.contains(block)) return null
-
-    // If caret is directly inside the root contentEditable (common on first line),
-    // wrap the current text node into a <p> so markdown shortcut logic can work.
-    if (block === editorRef.current) {
-      const editor = editorRef.current
-      if (!selection.rangeCount) return null
-      const range = selection.getRangeAt(0)
-
-      const wrapTextNodeAsParagraph = (textNode: Text, caretOffset: number) => {
-        const p = document.createElement('p')
-        editor.insertBefore(p, textNode)
-        p.appendChild(textNode)
-        const r = document.createRange()
-        const safeOffset = Math.max(0, Math.min(caretOffset, textNode.length))
-        r.setStart(textNode, safeOffset)
-        r.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(r)
-        return p
-      }
-
-      if (range.startContainer.nodeType === Node.TEXT_NODE && range.startContainer.parentNode === editor) {
-        return wrapTextNodeAsParagraph(range.startContainer as Text, range.startOffset)
-      }
-
-      if (range.startContainer === editor) {
-        const before = editor.childNodes[range.startOffset - 1] || null
-        const at = editor.childNodes[range.startOffset] || null
-
-        const createParagraphAtCaret = () => {
-          const p = document.createElement('p')
-          p.appendChild(document.createElement('br'))
-          if (at) {
-            editor.insertBefore(p, at)
-          } else {
-            editor.appendChild(p)
-          }
-
-          // If caret is around <br>-based line break, remove nearby break marker
-          // so the new block cleanly represents the current line.
-          if (before && before.nodeName === 'BR' && before.parentNode === editor) {
-            editor.removeChild(before)
-          } else if (at && at.nodeName === 'BR' && at.parentNode === editor) {
-            editor.removeChild(at)
-          }
-
-          const r = document.createRange()
-          r.selectNodeContents(p)
-          r.collapse(true)
-          selection.removeAllRanges()
-          selection.addRange(r)
-          return p
-        }
-
-        // At a visual line boundary represented by <br>, current line should be
-        // treated as a new block instead of wrapping previous line content.
-        if ((before && before.nodeName === 'BR') || (at && at.nodeName === 'BR')) {
-          return createParagraphAtCaret()
-        }
-
-        // Important safety rule:
-        // never fall back to the previous text node here, otherwise shortcut
-        // parsing can target the previous line by mistake.
-        if (at && at.nodeType === Node.TEXT_NODE && at.parentNode === editor) {
-          const textNode = at as Text
-          return wrapTextNodeAsParagraph(textNode, 0)
-        }
-
-        // If caret is at the end and there is no "at" text node, create a fresh
-        // paragraph for the current line to avoid binding to previous content.
-        if (!at) {
-          return createParagraphAtCaret()
-        }
-      }
-
-      // Empty editor: create a default paragraph block.
-      if (editor.childNodes.length === 0) {
-        const p = document.createElement('p')
-        p.appendChild(document.createElement('br'))
-        editor.appendChild(p)
-        const r = document.createRange()
-        r.selectNodeContents(p)
-        r.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(r)
-        return p
-      }
-
-      return null
-    }
-
-    return block as HTMLElement
-  }, [])
-
-  const deleteCharsBeforeCaret = useCallback((selection: Selection, count: number): boolean => {
-    if (count <= 0 || !selection.rangeCount) return false
-
-    const caretRange = selection.getRangeAt(0)
-    let endContainer: Node = caretRange.endContainer
-    let endOffset: number = caretRange.endOffset
-
-    // When caret is at element level (not text node), try to resolve to the
-    // preceding text node so we can reliably delete the trigger characters.
-    if (endContainer.nodeType !== Node.TEXT_NODE) {
-      if (endContainer.nodeType === Node.ELEMENT_NODE && endOffset > 0) {
-        // Walk into the last child of the node just before caret
-        let child: ChildNode | null = (endContainer as Element).childNodes[endOffset - 1]
-        while (child && child.nodeType !== Node.TEXT_NODE) {
-          if (child.nodeType === Node.ELEMENT_NODE && child.lastChild) {
-            child = child.lastChild
-          } else {
-            child = null
-            break
-          }
-        }
-        if (child && child.nodeType === Node.TEXT_NODE) {
-          endContainer = child
-          endOffset = (child as Text).length
-        } else {
-          return false
-        }
-      } else {
-        return false
-      }
-    }
-
-    if (endOffset < count) {
-      return false
-    }
-
-    const deleteRange = document.createRange()
-    deleteRange.setStart(endContainer as Text, endOffset - count)
-    deleteRange.setEnd(endContainer as Text, endOffset)
-    deleteRange.deleteContents()
-    return true
-  }, [])
-
-  const deleteMarkdownTrigger = useCallback((selection: Selection, triggerText: string): boolean => {
-    return deleteCharsBeforeCaret(selection, triggerText.length)
-  }, [deleteCharsBeforeCaret])
-
-  // Ensure the caret's current line lives in its own isolated block element.
-  // If the block also contains earlier content (previous lines separated by <br>),
-  // split it so that earlier content stays in the original block and the caret
-  // ends up in a brand-new <p>. Returns the isolated block, or null on failure.
-  const ensureIsolatedBlock = useCallback((): HTMLElement | null => {
-    const editor = editorRef.current
-    const selection = window.getSelection()
-    if (!editor || !selection || !selection.rangeCount) return null
-
-    const range = selection.getRangeAt(0)
-
-    // Walk up from caret to find the nearest block-level ancestor inside editor
-    let blockEl: HTMLElement | null = null
-    let cur: Node | null = range.startContainer
-    while (cur && cur !== editor) {
-      if (cur.nodeType === Node.ELEMENT_NODE) {
-        const tag = (cur as HTMLElement).tagName.toLowerCase()
-        if (['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'li'].includes(tag)) {
-          blockEl = cur as HTMLElement
-          break
-        }
-      }
-      cur = cur.parentNode
-    }
-
-    if (!blockEl || blockEl === editor) return null
-
-    // Is there meaningful text before the caret inside this block?
-    const checkRange = document.createRange()
-    checkRange.selectNodeContents(blockEl)
-    checkRange.setEnd(range.startContainer, range.startOffset)
-    const textBefore = checkRange.toString().trim()
-
-    if (textBefore.length === 0) {
-      // Nothing before caret – block is already isolated for our purposes
-      return blockEl
-    }
-
-    // --- Block has earlier content: split it ---
-    // Extract everything from caret to end-of-block into a DocumentFragment
-    const extractRange = document.createRange()
-    extractRange.setStart(range.startContainer, range.startOffset)
-    extractRange.setEnd(blockEl, blockEl.childNodes.length)
-    const fragment = extractRange.extractContents()
-
-    // Remove trailing <br>(s) left in the original block (they were line separators)
-    while (blockEl.lastChild && blockEl.lastChild.nodeName === 'BR') {
-      blockEl.removeChild(blockEl.lastChild)
-    }
-    if (!blockEl.innerHTML.trim()) {
-      blockEl.innerHTML = '<br>'
-    }
-
-    // Create a new <p> and put the extracted content in it
-    const newBlock = document.createElement('p')
-    newBlock.appendChild(fragment)
-    if (!newBlock.innerHTML.trim()) {
-      newBlock.innerHTML = '<br>'
-    }
-
-    blockEl.parentNode!.insertBefore(newBlock, blockEl.nextSibling)
-
-    // Place caret at the start of the new block
-    const r = document.createRange()
-    r.selectNodeContents(newBlock)
-    r.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(r)
-
-    return newBlock
-  }, [])
-
-  // Replace a block element's tag (e.g. <p> → <h1>) while keeping its children
-  const convertBlockTag = useCallback((block: HTMLElement, newTag: string): HTMLElement => {
-    const selection = window.getSelection()
-    const newBlock = document.createElement(newTag)
-
-    while (block.firstChild) {
-      newBlock.appendChild(block.firstChild)
-    }
-    block.parentNode!.replaceChild(newBlock, block)
-
-    if (!newBlock.innerHTML.trim()) {
-      newBlock.innerHTML = '<br>'
-    }
-
-    if (selection) {
-      const r = document.createRange()
-      r.selectNodeContents(newBlock)
-      r.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(r)
-    }
-    return newBlock
-  }, [])
-
-  const applyMarkdownShortcut = useCallback((e: React.KeyboardEvent): boolean => {
-    if ((e.nativeEvent as KeyboardEvent).isComposing || ((e.nativeEvent as KeyboardEvent).keyCode === 229)) {
-      return false
-    }
-    if (!editorRef.current) return false
-    const selection = window.getSelection()
-    if (!selection || !selection.isCollapsed) return false
-
-    const block = getCurrentBlock(selection)
-    if (!block) return false
-    const blockTag = block.tagName.toLowerCase()
-
-    const beforeCaret = getTextBeforeCaretInBlock(block, selection)
-    const currentLine = (beforeCaret.split('\n').pop() || '').replace(/\u200b/g, '').trim()
-
-    if (e.key === ' ') {
-      // Do not run block markdown shortcuts while already inside a heading.
-      // This avoids IME candidate-confirm space accidentally retriggering
-      // markdown transformations and dropping composing text.
-      if (blockTag === 'h1' || blockTag === 'h2' || blockTag === 'h3') return false
-
-      const tagMap: Record<string, string> = {
-        '#': 'h1',
-        '##': 'h2',
-        '###': 'h3',
-        '>': 'blockquote',
-      }
-
-      if (tagMap[currentLine]) {
-        e.preventDefault()
-        if (!deleteMarkdownTrigger(selection, currentLine)) return false
-        // Isolate the current line into its own block, then convert its tag
-        const isolated = ensureIsolatedBlock()
-        if (isolated) {
-          convertBlockTag(isolated, tagMap[currentLine])
-        }
-        handleInput()
-        return true
-      }
-
-      if (currentLine === '-' || currentLine === '*') {
-        e.preventDefault()
-        if (!deleteMarkdownTrigger(selection, currentLine)) return false
-        const listBlock = ensureIsolatedBlock()
-        if (listBlock) {
-          const ul = document.createElement('ul')
-          const li = document.createElement('li')
-          li.appendChild(document.createElement('br'))
-          ul.appendChild(li)
-          listBlock.parentNode?.replaceChild(ul, listBlock)
-          const r = document.createRange()
-          r.selectNodeContents(li)
-          r.collapse(true)
-          selection.removeAllRanges()
-          selection.addRange(r)
-        } else {
-          document.execCommand('insertUnorderedList', false)
-        }
-        handleInput()
-        return true
-      }
-
-      const orderedMatch = currentLine.match(/^(\d+)[\.\．。]$/)
-      if (orderedMatch) {
-        e.preventDefault()
-        // Prefer replacing the isolated block directly. This is more robust than
-        // relying on text-node deletion, which can fail when caret container is
-        // element-level after browser normalization.
-        const listBlock = ensureIsolatedBlock() || block
-        if (listBlock && listBlock.parentNode) {
-          const ol = document.createElement('ol')
-          const start = Number(orderedMatch[1] || '1')
-          if (Number.isFinite(start) && start > 1) {
-            ol.start = start
-          }
-          const li = document.createElement('li')
-          li.appendChild(document.createElement('br'))
-          ol.appendChild(li)
-          listBlock.parentNode?.replaceChild(ol, listBlock)
-          const r = document.createRange()
-          r.selectNodeContents(li)
-          r.collapse(true)
-          selection.removeAllRanges()
-          selection.addRange(r)
-        } else {
-          if (!deleteMarkdownTrigger(selection, currentLine)) return false
-          document.execCommand('insertOrderedList', false)
-        }
-        handleInput()
-        return true
-      }
-    }
-
-    if (e.key === 'Enter' && (currentLine === '---' || currentLine === '***')) {
-      e.preventDefault()
-      if (!deleteMarkdownTrigger(selection, currentLine)) return false
-      document.execCommand('insertHorizontalRule', false)
-      document.execCommand('insertParagraph', false)
-      handleInput()
-      return true
-    }
-
-    return false
-  }, [convertBlockTag, deleteMarkdownTrigger, ensureIsolatedBlock, getCurrentBlock, getTextBeforeCaretInBlock, handleInput])
-
+  // --- Inline typing state management ---
   const clearInlineTypingState = useCallback((includeBold = false) => {
     const commands: Array<'bold' | 'italic' | 'strikeThrough' | 'underline'> = [
       'italic',
@@ -778,304 +298,31 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     document.execCommand('hiliteColor', false, 'transparent')
   }, [])
 
-  const isSelectionInsideHeading = useCallback((): boolean => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return false
-    let node: Node | null = selection.anchorNode
-    while (node && node !== editorRef.current) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const tag = (node as HTMLElement).tagName.toLowerCase()
-        if (tag === 'h1' || tag === 'h2' || tag === 'h3') return true
-      }
-      node = node.parentNode
-    }
-    return false
-  }, [])
+  // --- Markdown shortcuts ---
+  const { applyMarkdownShortcut, applyInlineMarkdownShortcut } = useMarkdownShortcuts(refs, {
+    getCurrentBlock,
+    getTextBeforeCaretInBlock,
+    deleteMarkdownTrigger,
+    ensureIsolatedBlock,
+    convertBlockTag,
+    isSelectionInsideHeading,
+    clearInlineTypingState,
+    handleInput,
+  })
 
-  const applyInlineMarkdownShortcut = useCallback((e: React.KeyboardEvent): boolean => {
-    const isSpaceTrigger = e.key === ' '
-    const isPrintableTrigger =
-      e.key.length === 1 &&
-      !e.ctrlKey &&
-      !e.metaKey &&
-      !e.altKey
+  // --- Image handling ---
+  const {
+    selectedImage,
+    setSelectedImage,
+    imageOverlayRect,
+    setImageOverlayRect,
+    resizeDragRef,
+    recalcSelectedImageOverlay,
+    resizeSelectedImageByFactor,
+    handlePaste,
+  } = useImageHandling(refs, handleInput, imageUrlMapRef)
 
-    if (!isSpaceTrigger && !isPrintableTrigger) return false
-
-    const selection = window.getSelection()
-    if (!selection || !selection.isCollapsed || !selection.rangeCount) return false
-
-    const range = selection.getRangeAt(0)
-    if (range.startContainer.nodeType !== Node.TEXT_NODE) return false
-
-    const textNode = range.startContainer as Text
-    const offset = range.startOffset
-    const before = textNode.data.slice(0, offset)
-    const candidate = isSpaceTrigger ? before : `${before}${e.key}`
-
-    type InlineMatch = {
-      regex: RegExp
-      build: (match: RegExpMatchArray) => HTMLElement
-      resetCommands?: Array<'bold' | 'italic' | 'strikeThrough' | 'underline'>
-      triggerKeys?: string[]
-    }
-
-    const patterns: InlineMatch[] = [
-      {
-        // **bold**
-        regex: /\*\*([^*\n][^*\n]*?)\*\*$/,
-        build: (m) => {
-          const el = document.createElement('strong')
-          el.textContent = m[1]
-          return el
-        },
-        resetCommands: ['bold'],
-        triggerKeys: [' ', '*'],
-      },
-      {
-        // *italic*
-        regex: /(?<!\*)\*([^*\n]+)\*$/,
-        build: (m) => {
-          const el = document.createElement('em')
-          el.textContent = m[1]
-          return el
-        },
-        resetCommands: ['italic'],
-        triggerKeys: [' ', '*'],
-      },
-      {
-        // _italic_
-        regex: /(?<!_)_([^_\n]+)_$/,
-        build: (m) => {
-          const el = document.createElement('em')
-          el.textContent = m[1]
-          return el
-        },
-        resetCommands: ['italic'],
-        triggerKeys: [' ', '_'],
-      },
-      {
-        // ~~strikethrough~~ or ～～strikethrough～～
-        regex: /(~~|～～)([^~～\n]+)\1$/,
-        build: (m) => {
-          const el = document.createElement('s')
-          el.textContent = m[2]
-          return el
-        },
-        resetCommands: ['strikeThrough'],
-        triggerKeys: [' ', '~', '～'],
-      },
-      {
-        // `inline code`
-        regex: /`([^`\n]+)`$/,
-        build: (m) => {
-          const el = document.createElement('code')
-          el.className = 'inline-code'
-          el.textContent = m[1]
-          return el
-        },
-        triggerKeys: [' ', '`'],
-      },
-      {
-        // ++underline++
-        regex: /\+\+([^+\n]+)\+\+$/,
-        build: (m) => {
-          const el = document.createElement('u')
-          el.textContent = m[1]
-          return el
-        },
-        resetCommands: ['underline'],
-        triggerKeys: [' ', '+'],
-      },
-      {
-        // <u>underline</u>
-        regex: /<u>([^<\n]+)<\/u>$/i,
-        build: (m) => {
-          const el = document.createElement('u')
-          el.textContent = m[1]
-          return el
-        },
-        resetCommands: ['underline'],
-        triggerKeys: [' '],
-      },
-      {
-        // [label](url)
-        regex: /\[([^\]\n]+)\]\(([^)\s]+)\)$/,
-        build: (m) => {
-          const el = document.createElement('a')
-          el.textContent = m[1]
-          el.href = m[2]
-          el.target = '_blank'
-          el.rel = 'noopener noreferrer'
-          return el
-        },
-        triggerKeys: [' ', ')'],
-      },
-      {
-        // $inline formula$
-        regex: /\$([^$\n]+)\$$/,
-        build: (m) => {
-          const el = document.createElement('span')
-          el.contentEditable = 'false'
-          el.className = 'formula-inline'
-          const latex = (m[1] || '').trim()
-          el.dataset.latex = latex
-          if (!latex) {
-            el.dataset.empty = 'true'
-            try {
-              katex.render('x', el, { throwOnError: false, displayMode: false })
-            } catch {
-              el.textContent = 'fx'
-            }
-            return el
-          }
-          try {
-            katex.render(latex, el, { throwOnError: false, displayMode: false })
-          } catch {
-            el.textContent = latex
-          }
-          return el
-        },
-        triggerKeys: [' ', '$'],
-      },
-    ]
-
-    for (const pattern of patterns) {
-      if (pattern.triggerKeys && !pattern.triggerKeys.includes(e.key)) continue
-
-      const match = candidate.match(pattern.regex)
-      if (!match) continue
-
-      const fullMatch = match[0]
-      const replaceStart = offset - before.length + candidate.length - fullMatch.length
-
-      if (replaceStart < 0) return false
-
-      e.preventDefault()
-
-      const replaceRange = document.createRange()
-      replaceRange.setStart(textNode, replaceStart)
-      replaceRange.setEnd(textNode, offset)
-      replaceRange.deleteContents()
-
-      const fragment = document.createDocumentFragment()
-      const formattedNode = pattern.build(match)
-      // Keep a dedicated plain-text caret anchor after the formatted node so
-      // subsequent typing stays outside the inline style without needing an
-      // extra visible space or keydown-time selection fixes.
-      const caretAnchor = document.createTextNode('')
-      fragment.appendChild(formattedNode)
-      fragment.appendChild(caretAnchor)
-      replaceRange.insertNode(fragment)
-
-      const caretRange = document.createRange()
-      caretRange.setStart(caretAnchor, 0)
-      caretRange.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(caretRange)
-
-      // Some browsers keep a hidden typing style state after rich-text edits.
-      // Explicitly disable command-based inline styles so following input stays plain.
-      if (pattern.resetCommands) {
-        for (const command of pattern.resetCommands) {
-          if (document.queryCommandState(command)) {
-            document.execCommand(command, false)
-          }
-        }
-      }
-      const inHeading = isSelectionInsideHeading()
-      if (!inHeading) {
-        clearInlineTypingState(true)
-      }
-
-      shouldResetInlineTypingRef.current = false
-
-      handleInput()
-      return true
-    }
-
-    return false
-  }, [clearInlineTypingState, handleInput, isSelectionInsideHeading])
-
-  const ensureCaretOutsideInlineFormatting = useCallback(() => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return
-
-    let node: Node | null = selection.anchorNode
-    let inlineAncestor: HTMLElement | null = null
-    const inlineTags = new Set(['strong', 'b', 'em', 'i', 's', 'del', 'code', 'a', 'u', 'span', 'font'])
-
-    while (node && node !== editorRef.current) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node as HTMLElement
-        if (inlineTags.has(el.tagName.toLowerCase())) {
-          inlineAncestor = el
-        }
-      }
-      node = node.parentNode
-    }
-
-    if (inlineAncestor && inlineAncestor.parentNode) {
-      const range = document.createRange()
-      range.setStartAfter(inlineAncestor)
-      range.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(range)
-    }
-  }, [])
-
-  const isCaretInsideInlineFormatting = useCallback((): boolean => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return false
-
-    let node: Node | null = selection.anchorNode
-    const inlineTags = new Set(['strong', 'b', 'em', 'i', 's', 'del', 'code', 'a', 'u', 'span', 'font'])
-
-    while (node && node !== editorRef.current) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node as HTMLElement
-        if (inlineTags.has(el.tagName.toLowerCase())) {
-          return true
-        }
-      }
-      node = node.parentNode
-    }
-    return false
-  }, [])
-
-  // Sync content to editor when it changes externally
-  useEffect(() => {
-    if (editorRef.current && !isInternalChange.current) {
-      const currentHtml = editorRef.current.innerHTML
-      // Only update if the content is different and editor is not focused
-      if (document.activeElement !== editorRef.current && currentHtml !== content) {
-        editorRef.current.innerHTML = content || '<p><br></p>'
-        ensureCodeBlockControls(editorRef.current)
-        renderCodeHighlights(editorRef.current, true)
-        if (!content) {
-          savedRangeRef.current = null
-        }
-      }
-    }
-    isInternalChange.current = false
-  }, [content, ensureCodeBlockControls, renderCodeHighlights])
-
-  useEffect(() => {
-    if (!editorRef.current || content) return
-    ensureReadyCaretForEmptyEditor()
-  }, [content, ensureReadyCaretForEmptyEditor])
-
-  // Initialize editor content
-  useEffect(() => {
-    if (editorRef.current && content) {
-      editorRef.current.innerHTML = content
-    }
-    // Make Enter always create a new <p> block instead of inserting <br>,
-    // so each line lives in its own block element.
-    try { document.execCommand('defaultParagraphSeparator', false, 'p') } catch { /* ignore */ }
-  }, [])
-
-  // Detect current format from selection
+  // --- Format state detection ---
   const detectFormatState = useCallback((node: Node | null): FormatState => {
     const state: FormatState = {
       heading: null,
@@ -1086,26 +333,23 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       bulletList: false,
       orderedList: false,
     }
-    
+
     if (!node) return state
-    
-    // Check formatting using queryCommandState
+
     state.bold = document.queryCommandState('bold')
     state.italic = document.queryCommandState('italic')
     state.underline = document.queryCommandState('underline')
     state.strikethrough = document.queryCommandState('strikeThrough')
     state.bulletList = document.queryCommandState('insertUnorderedList')
     state.orderedList = document.queryCommandState('insertOrderedList')
-    
-    // Get the element to check for heading
-    let element: Element | null = node.nodeType === Node.TEXT_NODE 
-      ? node.parentElement 
+
+    let element: Element | null = node.nodeType === Node.TEXT_NODE
+      ? node.parentElement
       : node as Element
-    
-    // Walk up the DOM tree to find heading
+
     while (element && element !== editorRef.current) {
       const tagName = element.tagName.toLowerCase()
-      
+
       if (tagName === 'h1') {
         state.heading = 'h1'
         break
@@ -1116,14 +360,13 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         state.heading = 'h3'
         break
       }
-      
+
       element = element.parentElement
     }
-    
+
     return state
   }, [])
 
-  // Keep toolbar active state in sync with current selection/caret.
   const handleSelectionChange = useCallback(() => {
     const selection = window.getSelection()
     if (!selection || !selection.rangeCount || !editorRef.current) {
@@ -1146,6 +389,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     return () => document.removeEventListener('selectionchange', handleSelectionChange)
   }, [handleSelectionChange])
 
+  // --- Scroll to heading (from outline) ---
   const scrollToHeadingIndex = useCallback((index: number) => {
     if (!editorRef.current || index < 0) return
     const headings = editorRef.current.querySelectorAll('h1, h2, h3')
@@ -1168,16 +412,14 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
   }, [scrollToHeadingIndex])
 
-  // Get current font size from a node (handles both Element and Text nodes)
+  // --- Font size helpers ---
   const getFontSizeFromNode = useCallback((node: Node | null): number => {
     if (!node) return DEFAULT_FONT_SIZE
-    
-    // If it's a text node, get its parent element
-    let element: Element | null = node.nodeType === Node.TEXT_NODE 
-      ? node.parentElement 
+
+    let element: Element | null = node.nodeType === Node.TEXT_NODE
+      ? node.parentElement
       : node as Element
-    
-    // Walk up the DOM tree to find a font-size style
+
     while (element && element !== editorRef.current) {
       const fontSize = window.getComputedStyle(element).fontSize
       const parsed = parseInt(fontSize, 10)
@@ -1186,7 +428,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       }
       element = element.parentElement
     }
-    
+
     return DEFAULT_FONT_SIZE
   }, [])
 
@@ -1221,17 +463,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     return getFontSizeFromNode(range.startContainer)
   }, [getFontSizeFromNode])
 
-  // Helper to select an element and place current selection on it.
-  const selectElement = useCallback((element: HTMLElement) => {
-    const selection = window.getSelection()
-    if (!selection) return
-    
-    const range = document.createRange()
-    range.selectNodeContents(element)
-    selection.removeAllRanges()
-    selection.addRange(range)
-  }, [])
-
+  // --- Style wrapping helper ---
   const wrapSelectionWithStyle = useCallback(
     (property: 'color' | 'backgroundColor', value: string, clearToken: string): boolean => {
       const selection = restoreSavedSelection()
@@ -1240,8 +472,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       const range = selection.getRangeAt(0)
       const extracted = range.extractContents()
 
-      // Remove existing inline color/highlight styles from extracted nodes
-      // so switching color/highlight works consistently.
       const allElements = extracted.querySelectorAll('*')
       allElements.forEach((el) => {
         (el as HTMLElement).style.removeProperty(property === 'color' ? 'color' : 'background-color')
@@ -1282,623 +512,18 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     scrollCaretIntoView()
   }, [restoreSavedSelection, scrollCaretIntoView])
 
-  const insertCodeBlockAtCaret = useCallback(() => {
-    const selection = restoreSavedSelection()
-    if (!selection || !selection.rangeCount) return
-    const range = selection.getRangeAt(0)
-    const currentBlock = getCurrentBlock(selection)
-    const codeText = document.createTextNode('\n')
-    const wrapper = document.createElement('div')
-    wrapper.className = 'code-block-wrapper'
-    const pre = document.createElement('pre')
-    pre.className = 'editor-code-block'
-    const code = document.createElement('code')
-    code.setAttribute('data-language', 'plaintext')
-    code.appendChild(codeText)
-    pre.appendChild(code)
-    wrapper.setAttribute('data-code-language', 'plaintext')
-    const controls = document.createElement('div')
-    controls.className = 'code-controls'
-    controls.setAttribute('contenteditable', 'false')
-    const langSelect = document.createElement('select')
-    langSelect.className = 'code-lang-select'
-    langSelect.setAttribute('contenteditable', 'false')
-    langSelect.setAttribute('data-code-lang-select', 'true')
-    CODE_LANGUAGES.forEach((lang) => {
-      const option = document.createElement('option')
-      option.value = lang
-      option.textContent = lang
-      langSelect.appendChild(option)
-    })
-    langSelect.value = 'plaintext'
-    const copyButton = document.createElement('button')
-    copyButton.type = 'button'
-    copyButton.draggable = false
-    copyButton.className = 'code-copy-btn'
-    copyButton.setAttribute('contenteditable', 'false')
-    copyButton.setAttribute('data-copy-code-btn', 'true')
-    copyButton.title = 'Copy code'
-    copyButton.innerHTML = '⧉'
-    controls.appendChild(langSelect)
-    controls.appendChild(copyButton)
-    const copyToast = document.createElement('span')
-    copyToast.className = 'code-copy-toast'
-    copyToast.setAttribute('contenteditable', 'false')
-    copyToast.textContent = '复制成功'
-    wrapper.appendChild(pre)
-    wrapper.appendChild(controls)
-    wrapper.appendChild(copyToast)
+  const insertTableAtCaret = useCallback((rows: number, cols: number) => {
+    const safeRows = Math.max(1, rows)
+    const safeCols = Math.max(1, cols)
+    const headers = Array.from({ length: safeCols }, (_, i) => `<th>表头 ${i + 1}</th>`).join('')
+    const bodyRows = Array.from({ length: safeRows - 1 }, (_, rowIndex) => {
+      const cells = Array.from({ length: safeCols }, (_, colIndex) => `<td>单元格 ${rowIndex + 1}-${colIndex + 1}</td>`).join('')
+      return `<tr>${cells}</tr>`
+    }).join('')
+    insertHtmlAtCaret(`<table><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table><p><br></p>`)
+  }, [insertHtmlAtCaret])
 
-    const paragraph = document.createElement('p')
-    paragraph.appendChild(document.createElement('br'))
-
-    if (!selection.isCollapsed) {
-      range.deleteContents()
-    }
-
-    if (currentBlock && editorRef.current && currentBlock !== editorRef.current) {
-      currentBlock.parentNode?.insertBefore(wrapper, currentBlock.nextSibling)
-      currentBlock.parentNode?.insertBefore(paragraph, wrapper.nextSibling)
-    } else if (editorRef.current) {
-      editorRef.current.appendChild(wrapper)
-      editorRef.current.appendChild(paragraph)
-    } else {
-      range.insertNode(paragraph)
-      range.insertNode(wrapper)
-    }
-
-    const caret = document.createRange()
-    caret.setStart(codeText, 0)
-    caret.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(caret)
-    savedRangeRef.current = caret.cloneRange()
-    handleInput()
-  }, [getCurrentBlock, handleInput, restoreSavedSelection])
-
-  const isSelectionInsideCodeBlock = useCallback((): boolean => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return false
-    const range = selection.getRangeAt(0)
-    const nodesToCheck: Array<Node | null> = [
-      selection.anchorNode,
-      selection.focusNode,
-      range.commonAncestorContainer,
-    ]
-    for (const node of nodesToCheck) {
-      const element = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node as HTMLElement | null
-      if (!element) continue
-      const pre = element.closest('pre.editor-code-block')
-      if (pre && editorRef.current.contains(pre)) return true
-    }
-    return false
-  }, [])
-
-  const insertNewLineInCodeBlock = useCallback((): boolean => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount) return false
-    const range = selection.getRangeAt(0)
-    range.deleteContents()
-    const newLineNode = document.createTextNode('\n')
-    range.insertNode(newLineNode)
-
-    const caret = document.createRange()
-    caret.setStart(newLineNode, newLineNode.textContent?.length || 1)
-    caret.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(caret)
-    savedRangeRef.current = caret.cloneRange()
-    return true
-  }, [])
-
-  const insertSoftBreakAtCaret = useCallback((): boolean => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount) return false
-    document.execCommand('insertLineBreak', false)
-    if (selection.rangeCount) {
-      savedRangeRef.current = selection.getRangeAt(0).cloneRange()
-    }
-    return true
-  }, [])
-
-  const splitParagraphAtCaret = useCallback((): boolean => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return false
-
-    const editor = editorRef.current
-    const currentBlock = getCurrentBlock(selection)
-    if (!currentBlock || currentBlock === editor) return false
-
-    const placeCaretInBlockStart = (block: HTMLElement) => {
-      const caret = document.createRange()
-      caret.selectNodeContents(block)
-      caret.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(caret)
-      savedRangeRef.current = caret.cloneRange()
-    }
-
-    const blockContainsSoftBreak = currentBlock.tagName.toLowerCase() !== 'pre' && (
-      !!currentBlock.querySelector('br') ||
-      Array.from(currentBlock.childNodes).some((node) => node.nodeName === 'BR')
-    )
-
-    if (blockContainsSoftBreak) {
-      const isolatedBlock = ensureIsolatedBlock()
-      if (isolatedBlock && isolatedBlock !== currentBlock && isolatedBlock.parentNode) {
-        const blankParagraph = document.createElement('p')
-        blankParagraph.appendChild(document.createElement('br'))
-        isolatedBlock.parentNode.insertBefore(blankParagraph, isolatedBlock)
-        placeCaretInBlockStart(blankParagraph)
-        return true
-      }
-    }
-
-    const hasMeaningfulContent = (node: ParentNode): boolean => {
-      const text = (node.textContent || '').replace(/\u200b/g, '').trim()
-      return text.length > 0 || !!node.querySelector('img, table, hr, pre, ul, ol, blockquote')
-    }
-
-    const hasVisualBreak = (node: ParentNode): boolean => {
-      const children = Array.from(node.childNodes)
-      for (const child of children) {
-        if (child.nodeType === Node.TEXT_NODE) {
-          if ((child.textContent || '').includes('\n')) return true
-          continue
-        }
-        if (child.nodeType === Node.ELEMENT_NODE) {
-          const element = child as HTMLElement
-          if (element.tagName.toLowerCase() === 'br') return true
-          if (hasVisualBreak(element)) return true
-        }
-      }
-      return false
-    }
-
-    const ensureBlockPlaceholder = (block: HTMLElement) => {
-      if (!hasMeaningfulContent(block) && !block.querySelector('br')) {
-        block.appendChild(document.createElement('br'))
-      }
-    }
-
-    const inlineTags = new Set(['span', 'font', 'strong', 'em', 'b', 'i', 'u', 'a', 's', 'del', 'code'])
-    const consumeLeadingVisualBreak = (node: ParentNode): boolean => {
-      let child = node.firstChild
-      while (child) {
-        if (child.nodeType === Node.TEXT_NODE) {
-          const text = child.textContent || ''
-          const withoutZwsp = text.replace(/\u200b/g, '')
-          const leadingMatch = withoutZwsp.match(/^[\s\u00a0]*\n/)
-          if (leadingMatch) {
-            child.textContent = text.replace(/^([\u200b\s\u00a0]*)\n/, '$1')
-            return true
-          }
-          if (withoutZwsp.trim()) return false
-          const next = child.nextSibling
-          child.parentNode?.removeChild(child)
-          child = next
-          continue
-        }
-
-        if (child.nodeType === Node.ELEMENT_NODE) {
-          const element = child as HTMLElement
-          const tag = element.tagName.toLowerCase()
-          if (tag === 'br') {
-            element.parentNode?.removeChild(element)
-            return true
-          }
-          if (inlineTags.has(tag)) {
-            const stripped = consumeLeadingVisualBreak(element)
-            const shouldRemoveEmptyWrapper =
-              !hasMeaningfulContent(element) &&
-              !element.querySelector('br, img, table, hr, pre, ul, ol, blockquote')
-            if (shouldRemoveEmptyWrapper) {
-              element.parentNode?.removeChild(element)
-            }
-            if (stripped) return true
-            child = shouldRemoveEmptyWrapper ? node.firstChild : element.nextSibling
-            continue
-          }
-        }
-
-        return false
-      }
-
-      return false
-    }
-
-    const consumeTrailingVisualBreak = (node: ParentNode): boolean => {
-      let child = node.lastChild
-      while (child) {
-        if (child.nodeType === Node.TEXT_NODE) {
-          const text = child.textContent || ''
-          const withoutZwsp = text.replace(/\u200b/g, '')
-          const trailingMatch = withoutZwsp.match(/\n[\s\u00a0]*$/)
-          if (trailingMatch) {
-            child.textContent = text.replace(/\n([\u200b\s\u00a0]*)$/, '$1')
-            return true
-          }
-          if (withoutZwsp.trim()) return false
-          const previous = child.previousSibling
-          child.parentNode?.removeChild(child)
-          child = previous
-          continue
-        }
-
-        if (child.nodeType === Node.ELEMENT_NODE) {
-          const element = child as HTMLElement
-          const tag = element.tagName.toLowerCase()
-          if (tag === 'br') {
-            element.parentNode?.removeChild(element)
-            return true
-          }
-          if (inlineTags.has(tag)) {
-            const stripped = consumeTrailingVisualBreak(element)
-            const shouldRemoveEmptyWrapper =
-              !hasMeaningfulContent(element) &&
-              !element.querySelector('br, img, table, hr, pre, ul, ol, blockquote')
-            if (shouldRemoveEmptyWrapper) {
-              element.parentNode?.removeChild(element)
-            }
-            if (stripped) return true
-            child = shouldRemoveEmptyWrapper ? node.lastChild : element.previousSibling
-            continue
-          }
-        }
-
-        return false
-      }
-
-      return false
-    }
-
-    let range = selection.getRangeAt(0)
-    if (!range.collapsed) {
-      range.deleteContents()
-      range = selection.getRangeAt(0)
-    }
-
-    const splitMarker = document.createComment('enter-split-marker')
-    range.insertNode(splitMarker)
-
-    const previewBeforeRange = document.createRange()
-    previewBeforeRange.selectNodeContents(currentBlock)
-    previewBeforeRange.setEndBefore(splitMarker)
-    const previewBefore = previewBeforeRange.cloneContents()
-    const caretStartsAfterVisualBreak = consumeTrailingVisualBreak(previewBefore)
-
-    const previewRange = document.createRange()
-    previewRange.setStartAfter(splitMarker)
-    previewRange.setEnd(currentBlock, currentBlock.childNodes.length)
-    const previewTrailing = previewRange.cloneContents()
-    const shouldInsertBlankLineBeforeTrailing = consumeLeadingVisualBreak(previewTrailing)
-
-    const extractRange = document.createRange()
-    extractRange.setStartAfter(splitMarker)
-    extractRange.setEnd(currentBlock, currentBlock.childNodes.length)
-    const trailingContent = extractRange.extractContents()
-    splitMarker.parentNode?.removeChild(splitMarker)
-
-    let hasTrailing = hasMeaningfulContent(trailingContent)
-    const trailingContainsVisualBreak = hasVisualBreak(trailingContent)
-    let leadingSoftBreak = false
-    while (hasTrailing && consumeLeadingVisualBreak(trailingContent)) {
-      leadingSoftBreak = true
-      hasTrailing = hasMeaningfulContent(trailingContent)
-    }
-
-    if (caretStartsAfterVisualBreak) {
-      while (consumeTrailingVisualBreak(currentBlock)) {
-        // Remove the soft-break that visually belonged between the two lines
-        // so the current block becomes the actual previous paragraph.
-      }
-    }
-
-    ensureBlockPlaceholder(currentBlock)
-
-    const newParagraph = document.createElement('p')
-    newParagraph.appendChild(document.createElement('br'))
-    currentBlock.parentNode?.insertBefore(newParagraph, currentBlock.nextSibling)
-
-    if (hasTrailing) {
-      if (
-        leadingSoftBreak ||
-        shouldInsertBlankLineBeforeTrailing ||
-        trailingContainsVisualBreak ||
-        caretStartsAfterVisualBreak
-      ) {
-        const trailingParagraph = document.createElement('p')
-        trailingParagraph.appendChild(trailingContent)
-        ensureBlockPlaceholder(trailingParagraph)
-        newParagraph.parentNode?.insertBefore(trailingParagraph, newParagraph.nextSibling)
-      } else {
-        while (newParagraph.firstChild) newParagraph.removeChild(newParagraph.firstChild)
-        newParagraph.appendChild(trailingContent)
-        ensureBlockPlaceholder(newParagraph)
-      }
-    }
-
-    const caret = document.createRange()
-    placeCaretInBlockStart(newParagraph)
-    return true
-  }, [ensureIsolatedBlock, getCurrentBlock])
-
-  const exitHeadingWithParagraph = useCallback((): boolean => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return false
-    const anchor = selection.anchorNode
-    const element = anchor?.nodeType === Node.TEXT_NODE ? anchor.parentElement : anchor as HTMLElement | null
-    const heading = element?.closest('h1, h2, h3, h4, h5, h6') as HTMLElement | null
-    if (!heading || !editorRef.current.contains(heading)) return false
-
-    const caretRange = selection.getRangeAt(0)
-
-    // Extract any content after the caret position within the heading
-    const trailingRange = document.createRange()
-    trailingRange.setStart(caretRange.startContainer, caretRange.startOffset)
-    trailingRange.setEnd(heading, heading.childNodes.length)
-    const trailingFragment = trailingRange.extractContents()
-    const trailingText = (trailingFragment.textContent || '').replace(/\u200b/g, '').trim()
-
-    // Ensure heading retains a placeholder if it's now empty
-    if (!(heading.textContent || '').replace(/\u200b/g, '').trim()) {
-      heading.appendChild(document.createElement('br'))
-    }
-
-    const paragraph = document.createElement('p')
-    if (trailingText.length > 0) {
-      paragraph.appendChild(trailingFragment)
-    } else {
-      paragraph.appendChild(document.createElement('br'))
-    }
-    heading.parentNode?.insertBefore(paragraph, heading.nextSibling)
-
-    const range = document.createRange()
-    range.selectNodeContents(paragraph)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    savedRangeRef.current = range.cloneRange()
-    return true
-  }, [])
-
-  const getCurrentListItem = useCallback((): HTMLLIElement | null => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return null
-    const range = selection.getRangeAt(0)
-    const nodesToCheck: Array<Node | null> = [
-      selection.anchorNode,
-      selection.focusNode,
-      range.commonAncestorContainer,
-    ]
-    for (const node of nodesToCheck) {
-      const element = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node as HTMLElement | null
-      if (!element) continue
-      const li = element.closest('li') as HTMLLIElement | null
-      if (li && editorRef.current.contains(li)) return li
-    }
-    return null
-  }, [])
-
-  const exitCurrentBlockWithNewParagraph = useCallback((): boolean => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return false
-    const listItem = getCurrentListItem()
-    if (listItem) {
-      const list = listItem.parentElement
-      if (!list || (list.tagName !== 'UL' && list.tagName !== 'OL')) return false
-      const newP = document.createElement('p')
-      newP.appendChild(document.createElement('br'))
-      list.parentNode?.insertBefore(newP, list.nextSibling)
-      const range = document.createRange()
-      range.selectNodeContents(newP)
-      range.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(range)
-      savedRangeRef.current = range.cloneRange()
-      return true
-    }
-
-    const isolated = ensureIsolatedBlock()
-    const currentBlock = isolated || getCurrentBlock(selection)
-    if (!currentBlock || currentBlock === editorRef.current) return false
-
-    const newP = document.createElement('p')
-    newP.appendChild(document.createElement('br'))
-    currentBlock.parentNode?.insertBefore(newP, currentBlock.nextSibling)
-
-    const range = document.createRange()
-    range.selectNodeContents(newP)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    savedRangeRef.current = range.cloneRange()
-    return true
-  }, [ensureIsolatedBlock, getCurrentBlock, getCurrentListItem])
-
-  const isCaretInsideList = useCallback((): boolean => {
-    return !!getCurrentListItem()
-  }, [getCurrentListItem])
-
-  const cleanupEmptyParagraphContainer = useCallback((node: Element | null) => {
-    const paragraph = node?.tagName?.toLowerCase() === 'p' ? node as HTMLParagraphElement : null
-    if (!paragraph || paragraph === editorRef.current) return
-    const hasBlockChildren = paragraph.querySelector('ul, ol, pre, table, blockquote, h1, h2, h3, h4, h5, h6, hr, img')
-    const normalizedText = (paragraph.textContent || '').replace(/\u200b/g, '').trim()
-    if (!hasBlockChildren && normalizedText.length === 0) {
-      paragraph.remove()
-    }
-  }, [])
-
-  const handleListEnter = useCallback((): boolean => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return false
-    const li = getCurrentListItem()
-    if (!li) return false
-    const list = li.parentElement as HTMLOListElement | HTMLUListElement | null
-    if (!list || (list.tagName !== 'UL' && list.tagName !== 'OL')) return false
-
-    const liText = (li.textContent || '').replace(/\u200b/g, '').trim()
-    const isEmpty = liText.length === 0
-    if (isEmpty) {
-      const listParent = list.parentNode
-      const listNextSibling = list.nextSibling
-      const listContainer = list.parentElement?.tagName.toLowerCase() === 'p'
-        ? list.parentElement as HTMLParagraphElement
-        : null
-      list.removeChild(li)
-      if (list.children.length === 0) {
-        list.remove()
-      }
-      const caret = document.createRange()
-      if (listContainer) {
-        const textOnly = (listContainer.textContent || '').replace(/\u200b/g, '').trim()
-        const hasList = !!listContainer.querySelector('ul, ol')
-        if (!hasList && textOnly.length === 0) {
-          listContainer.innerHTML = '<br>'
-        } else {
-          listContainer.appendChild(document.createElement('br'))
-        }
-        caret.selectNodeContents(listContainer)
-        caret.collapse(false)
-      } else {
-        const p = document.createElement('p')
-        p.appendChild(document.createElement('br'))
-        if (listParent) {
-          listParent.insertBefore(p, listNextSibling)
-        } else {
-          editorRef.current.appendChild(p)
-        }
-        caret.selectNodeContents(p)
-        caret.collapse(true)
-      }
-      selection.removeAllRanges()
-      selection.addRange(caret)
-      savedRangeRef.current = caret.cloneRange()
-      return true
-    }
-
-    const newLi = document.createElement('li')
-    newLi.appendChild(document.createElement('br'))
-    li.parentNode?.insertBefore(newLi, li.nextSibling)
-    const caret = document.createRange()
-    caret.selectNodeContents(newLi)
-    caret.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(caret)
-    savedRangeRef.current = caret.cloneRange()
-    return true
-  }, [cleanupEmptyParagraphContainer, getCurrentListItem])
-
-  const recalcSelectedImageOverlay = useCallback((imageEl: HTMLImageElement | null = selectedImage) => {
-    if (!imageEl || !editorRef.current) {
-      setImageOverlayRect(null)
-      return
-    }
-    if (!imageEl.isConnected) {
-      setSelectedImage(null)
-      setImageOverlayRect(null)
-      return
-    }
-    const containerRect = editorRef.current.getBoundingClientRect()
-    const imageRect = imageEl.getBoundingClientRect()
-    const width = imageRect.width || imageEl.naturalWidth
-    const height = imageRect.height || imageEl.naturalHeight
-
-    // Image not yet rendered - defer until it loads
-    if (width === 0 || height === 0) {
-      const editorEl = editorRef.current
-      imageEl.addEventListener('load', () => {
-        if (!editorEl || !imageEl.isConnected) return
-        const cr = editorEl.getBoundingClientRect()
-        const ir = imageEl.getBoundingClientRect()
-        if (ir.width > 0 && ir.height > 0) {
-          setImageOverlayRect({
-            top: ir.top - cr.top + editorEl.scrollTop + editorEl.offsetTop,
-            left: ir.left - cr.left + editorEl.scrollLeft + editorEl.offsetLeft,
-            width: ir.width,
-            height: ir.height,
-          })
-        }
-      }, { once: true })
-      return
-    }
-
-    setImageOverlayRect({
-      top: imageRect.top - containerRect.top + editorRef.current.scrollTop + editorRef.current.offsetTop,
-      left: imageRect.left - containerRect.left + editorRef.current.scrollLeft + editorRef.current.offsetLeft,
-      width: imageRect.width,
-      height: imageRect.height,
-    })
-  }, [selectedImage])
-
-  const resizeSelectedImageByFactor = useCallback((factor: number) => {
-    const image = selectedImage
-    if (!image || !Number.isFinite(factor) || factor <= 0) return
-    const rect = image.getBoundingClientRect()
-    const currentWidth = rect.width || image.naturalWidth || 160
-    const currentHeight = rect.height || image.naturalHeight || 90
-    const ratio = currentHeight > 0 ? currentWidth / currentHeight : 1
-    const nextWidth = Math.max(60, Math.min(2400, Math.round(currentWidth * factor)))
-    const nextHeight = Math.max(40, Math.round(nextWidth / (ratio || 1)))
-    image.style.width = `${nextWidth}px`
-    image.style.height = `${nextHeight}px`
-    image.removeAttribute('width')
-    image.removeAttribute('height')
-    recalcSelectedImageOverlay(image)
-    handleInput()
-  }, [handleInput, recalcSelectedImageOverlay, selectedImage])
-
-  const removeSingleEmptyListAtCaret = useCallback((): boolean => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return false
-    const li = getCurrentListItem()
-    if (!li) return false
-    const list = li.parentElement as HTMLOListElement | HTMLUListElement | null
-    if (!list || (list.tagName !== 'UL' && list.tagName !== 'OL')) return false
-    if (list.children.length !== 1 || list.firstElementChild !== li) return false
-    const liText = (li.textContent || '').replace(/\u200b/g, '').trim()
-    if (liText.length > 0) return false
-
-    const listContainer = list.parentElement?.tagName.toLowerCase() === 'p'
-      ? list.parentElement
-      : list
-    const previous = listContainer?.previousElementSibling || null
-    const next = listContainer?.nextElementSibling || null
-    list.remove()
-    cleanupEmptyParagraphContainer(listContainer)
-
-    const caret = document.createRange()
-    if (previous && previous.nodeType === Node.ELEMENT_NODE) {
-      caret.selectNodeContents(previous)
-      caret.collapse(false)
-    } else if (next && next.nodeType === Node.ELEMENT_NODE) {
-      caret.selectNodeContents(next)
-      caret.collapse(true)
-    } else {
-      const p = document.createElement('p')
-      p.appendChild(document.createElement('br'))
-      editorRef.current.appendChild(p)
-      caret.selectNodeContents(p)
-      caret.collapse(true)
-    }
-    selection.removeAllRanges()
-    selection.addRange(caret)
-    savedRangeRef.current = caret.cloneRange()
-    return true
-  }, [cleanupEmptyParagraphContainer, getCurrentListItem])
-
-  const getCurrentTableCell = useCallback((): HTMLTableCellElement | null => {
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editorRef.current) return null
-    const anchor = selection.anchorNode
-    const element = anchor?.nodeType === Node.TEXT_NODE ? anchor.parentElement : anchor as HTMLElement | null
-    if (!element) return null
-    const cell = element.closest('td, th') as HTMLTableCellElement | null
-    if (!cell) return null
-    return editorRef.current.contains(cell) ? cell : null
-  }, [])
-
+  // --- Formula rendering ---
   const renderFormulaElement = useCallback((el: HTMLElement, latex: string) => {
     const normalized = latex.trim()
     el.dataset.latex = normalized
@@ -1918,224 +543,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     } catch {
       el.textContent = normalized
     }
-  }, [])
-
-  useEffect(() => {
-    const editor = editorRef.current
-    if (!editor || !selectedImage) return
-    const handleRecalc = () => recalcSelectedImageOverlay()
-    editor.addEventListener('scroll', handleRecalc)
-    window.addEventListener('resize', handleRecalc)
-    return () => {
-      editor.removeEventListener('scroll', handleRecalc)
-      window.removeEventListener('resize', handleRecalc)
-    }
-  }, [recalcSelectedImageOverlay, selectedImage])
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!resizeDragRef.current || !selectedImage) return
-      e.preventDefault()
-      const drag = resizeDragRef.current
-      const dx = e.clientX - drag.startX
-      const signX = drag.corner === 'sw' || drag.corner === 'nw' ? -1 : 1
-      const nextWidth = Math.max(60, drag.startWidth + dx * signX)
-      const nextHeight = Math.max(40, nextWidth / drag.ratio)
-      selectedImage.style.width = `${Math.round(nextWidth)}px`
-      selectedImage.style.height = `${Math.round(nextHeight)}px`
-      selectedImage.removeAttribute('width')
-      selectedImage.removeAttribute('height')
-      recalcSelectedImageOverlay()
-    }
-    const handleMouseUp = () => {
-      if (!resizeDragRef.current) return
-      resizeDragRef.current = null
-      handleInput()
-    }
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [handleInput, recalcSelectedImageOverlay, selectedImage])
-
-  const handleEditorClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement
-    if (!editorRef.current) return
-
-    const placeCaretFromPoint = () => {
-      const doc = document as Document & {
-        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
-        caretRangeFromPoint?: (x: number, y: number) => Range | null
-      }
-      const selection = window.getSelection()
-      if (!selection) return
-      if (selection.rangeCount > 0 && !selection.getRangeAt(0).collapsed) return
-
-      let nextRange: Range | null = null
-      const caretPosition = doc.caretPositionFromPoint?.(e.clientX, e.clientY)
-      if (caretPosition) {
-        nextRange = document.createRange()
-        nextRange.setStart(caretPosition.offsetNode, caretPosition.offset)
-        nextRange.collapse(true)
-      } else {
-        nextRange = doc.caretRangeFromPoint?.(e.clientX, e.clientY) || null
-      }
-
-      if (!nextRange || !editorRef.current?.contains(nextRange.startContainer)) return
-      selection.removeAllRanges()
-      selection.addRange(nextRange)
-      savedRangeRef.current = nextRange.cloneRange()
-    }
-
-    const formula = target.closest('.formula-inline')
-    if (formula) return
-
-    const link = target.closest('a') as HTMLAnchorElement | null
-    if (link && editorRef.current.contains(link)) {
-      if (e.metaKey || e.ctrlKey) {
-        e.preventDefault()
-        const href = link.getAttribute('href') || link.href || ''
-        if (href) {
-          try {
-            const anchor = document.createElement('a')
-            anchor.href = href
-            anchor.target = '_blank'
-            anchor.rel = 'noopener noreferrer'
-            document.body.appendChild(anchor)
-            anchor.click()
-            document.body.removeChild(anchor)
-            return
-          } catch {
-            // Continue fallback
-          }
-          try {
-            const openedWindow = window.open(href, '_blank', 'noopener,noreferrer')
-            if (openedWindow) return
-          } catch {
-            // Continue fallback
-          }
-          void openExternal(href).catch(() => {
-            // ignore
-          })
-        }
-        return
-      }
-      e.preventDefault()
-      const rect = link.getBoundingClientRect()
-      const popoverWidth = 320
-      const left = Math.max(8, Math.min(rect.left + rect.width / 2 - popoverWidth / 2, window.innerWidth - popoverWidth - 8))
-      const top = Math.max(8, rect.bottom + 8)
-      setEditingLink({
-        element: link,
-        text: link.textContent || '',
-        href: link.getAttribute('href') || '',
-        range: null,
-        position: { top, left },
-      })
-      return
-    }
-
-    if (target.tagName === 'IMG') {
-      const image = target as HTMLImageElement
-      setSelectedImage(image)
-      setEditingLink(null)
-      recalcSelectedImageOverlay(image)
-      return
-    }
-
-    setEditingLink(null)
-    setSelectedImage(null)
-    setImageOverlayRect(null)
-    placeCaretFromPoint()
-  }, [recalcSelectedImageOverlay])
-
-  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
-    const items = Array.from(e.clipboardData.items)
-    const imageItem = items.find((item) => item.type.startsWith('image/'))
-    if (!imageItem) return
-
-    e.preventDefault()
-    const file = imageItem.getAsFile()
-    if (!file || !editorRef.current) return
-
-    const reader = new FileReader()
-    reader.onload = (evt) => {
-      const dataUrl = evt.target?.result as string | undefined
-      if (!dataUrl || !editorRef.current) return
-
-      const img = document.createElement('img')
-      img.src = dataUrl
-      img.style.maxWidth = '100%'
-
-      const selection = window.getSelection()
-      if (selection && selection.rangeCount) {
-        const range = selection.getRangeAt(0)
-        if (!range.collapsed) range.deleteContents()
-        range.insertNode(img)
-        const newRange = document.createRange()
-        newRange.setStartAfter(img)
-        newRange.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(newRange)
-      } else {
-        editorRef.current.appendChild(img)
-      }
-
-      handleInput()
-      setSelectedImage(img)
-      setEditingLink(null)
-      // Show overlay once image loads
-      const editorEl = editorRef.current
-      const showOverlay = () => {
-        if (!editorEl || !img.isConnected) return
-        const cr = editorEl.getBoundingClientRect()
-        const ir = img.getBoundingClientRect()
-        if (ir.width > 0 && ir.height > 0) {
-          setImageOverlayRect({
-            top: ir.top - cr.top + editorEl.scrollTop + editorEl.offsetTop,
-            left: ir.left - cr.left + editorEl.scrollLeft + editorEl.offsetLeft,
-            width: ir.width,
-            height: ir.height,
-          })
-        }
-      }
-      img.addEventListener('load', showOverlay, { once: true })
-      // Try immediately (for already-cached data URLs)
-      showOverlay()
-    }
-    reader.readAsDataURL(file)
-  }, [handleInput])
-
-  const openExternalUrl = useCallback((href: string) => {
-    const url = href.trim()
-    if (!url) return
-    try {
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.target = '_blank'
-      anchor.rel = 'noopener noreferrer'
-      document.body.appendChild(anchor)
-      anchor.click()
-      document.body.removeChild(anchor)
-      return
-    } catch {
-      // Continue to other fallbacks.
-    }
-    try {
-      const openedWindow = window.open(url, '_blank', 'noopener,noreferrer')
-      if (openedWindow) return
-    } catch {
-      // Continue to shell fallback.
-    }
-    try {
-      void openExternal(url)
-      return
-    } catch {
-      // ignore
-    }
-    // No-op fallback: keep editor stable even if platform blocks opening.
   }, [])
 
   const openFormulaDialog = useCallback((initialLatex: string, targetEl: HTMLElement | null) => {
@@ -2179,6 +586,397 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     formulaTargetRef.current = null
   }, [formulaDraft, handleInput, renderFormulaElement, restoreSavedSelection])
 
+  // --- Font size application ---
+  const applyFontSize = useCallback((size: number) => {
+    const selection = restoreSavedSelection()
+    if (!selection || !selection.rangeCount || selection.isCollapsed) return
+    const range = selection.getRangeAt(0)
+    const selectedText = selection.toString()
+    if (!selectedText.trim()) return
+
+    const commonEl = (range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+      ? range.commonAncestorContainer.parentElement
+      : range.commonAncestorContainer as HTMLElement | null)
+    const existingSpan = commonEl?.closest('.font-size-span') as HTMLElement | null
+    if (existingSpan) {
+      const spanRange = document.createRange()
+      spanRange.selectNodeContents(existingSpan)
+      const coversWholeSpan =
+        range.compareBoundaryPoints(Range.START_TO_START, spanRange) <= 0 &&
+        range.compareBoundaryPoints(Range.END_TO_END, spanRange) >= 0
+      if (coversWholeSpan) {
+        existingSpan.style.fontSize = `${size}px`
+        existingSpan.style.lineHeight = '1.6'
+        const newRange = document.createRange()
+        newRange.selectNodeContents(existingSpan)
+        selection.removeAllRanges()
+        selection.addRange(newRange)
+        savedRangeRef.current = newRange.cloneRange()
+        shouldResetInlineTypingRef.current = true
+        handleInput()
+        return
+      }
+    }
+
+    const fragment = range.extractContents()
+    const blockTags = new Set(['p', 'div', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'ul', 'ol', 'table', 'tr', 'td', 'th'])
+    const existingSizedSpans = Array.from(fragment.querySelectorAll('.font-size-span')) as HTMLElement[]
+    const containsStructuredContent =
+      existingSizedSpans.length > 0 ||
+      !!fragment.querySelector?.('p, div, li, blockquote, h1, h2, h3, h4, h5, h6, pre, ul, ol, table, tr, td, th, br')
+
+    const wrapTextNodeWithFontSize = (textNode: Text) => {
+      if (!textNode.textContent?.trim()) return
+      const parent = textNode.parentNode
+      if (!parent) return
+      if (
+        parent.nodeType === Node.ELEMENT_NODE &&
+        (parent as HTMLElement).classList.contains('font-size-span')
+      ) {
+        const parentEl = parent as HTMLElement
+        parentEl.style.fontSize = `${size}px`
+        parentEl.style.lineHeight = '1.6'
+        return
+      }
+      const fontSpan = document.createElement('span')
+      fontSpan.className = 'font-size-span'
+      fontSpan.style.fontSize = `${size}px`
+      fontSpan.style.lineHeight = '1.6'
+      parent.insertBefore(fontSpan, textNode)
+      fontSpan.appendChild(textNode)
+    }
+
+    let firstInsertedNode: Node | null = null
+    let lastInsertedNode: Node | null = null
+
+    if (containsStructuredContent) {
+      existingSizedSpans.forEach((span) => {
+        span.style.fontSize = `${size}px`
+        span.style.lineHeight = '1.6'
+      })
+
+      const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT)
+      const textNodesToWrap: Text[] = []
+      let current: Node | null = walker.nextNode()
+      while (current) {
+        const textNode = current as Text
+        let shouldWrap = !!textNode.textContent?.trim()
+        let ancestor = textNode.parentNode
+        while (shouldWrap && ancestor && ancestor !== fragment) {
+          if (
+            ancestor.nodeType === Node.ELEMENT_NODE &&
+            (ancestor as HTMLElement).classList.contains('font-size-span')
+          ) {
+            shouldWrap = false
+            break
+          }
+          if (
+            ancestor.nodeType === Node.ELEMENT_NODE &&
+            blockTags.has((ancestor as HTMLElement).tagName.toLowerCase())
+          ) {
+            break
+          }
+          ancestor = ancestor.parentNode
+        }
+        if (shouldWrap) {
+          textNodesToWrap.push(textNode)
+        }
+        current = walker.nextNode()
+      }
+
+      textNodesToWrap.forEach(wrapTextNodeWithFontSize)
+      firstInsertedNode = fragment.firstChild
+      lastInsertedNode = fragment.lastChild
+      range.insertNode(fragment)
+    } else {
+      const fontSpan = document.createElement('span')
+      fontSpan.className = 'font-size-span'
+      fontSpan.style.fontSize = `${size}px`
+      fontSpan.style.lineHeight = '1.6'
+      fontSpan.appendChild(fragment)
+      firstInsertedNode = fontSpan
+      lastInsertedNode = fontSpan
+      range.insertNode(fontSpan)
+    }
+
+    const newRange = document.createRange()
+    try {
+      if (
+        firstInsertedNode &&
+        lastInsertedNode &&
+        firstInsertedNode.parentNode &&
+        lastInsertedNode.parentNode
+      ) {
+        newRange.setStartBefore(firstInsertedNode)
+        newRange.setEndAfter(lastInsertedNode)
+      } else {
+        newRange.setStart(range.startContainer, range.startOffset)
+        newRange.setEnd(range.endContainer, range.endOffset)
+      }
+    } catch {
+      newRange.setStart(range.startContainer, range.startOffset)
+      newRange.setEnd(range.endContainer, range.endOffset)
+    }
+    selection.removeAllRanges()
+    selection.addRange(newRange)
+    savedRangeRef.current = newRange.cloneRange()
+    shouldResetInlineTypingRef.current = true
+    handleInput()
+  }, [handleInput, restoreSavedSelection])
+
+  // --- applyStyle (toolbar actions) ---
+  const applyStyle = useCallback((style: string, value?: string) => {
+    const selection = restoreSavedSelection()
+    if (!selection || !selection.rangeCount) return
+    const range = selection.getRangeAt(0)
+    const selectedText = selection.toString()
+
+    switch (style) {
+      case 'bold':
+        document.execCommand('bold', false)
+        break
+      case 'italic':
+        document.execCommand('italic', false)
+        break
+      case 'underline':
+        document.execCommand('underline', false)
+        break
+      case 'strikethrough':
+        document.execCommand('strikeThrough', false)
+        break
+      case 'color': {
+        if (selection.isCollapsed || !selectedText) break
+        wrapSelectionWithStyle('color', value || 'inherit', 'inherit')
+        selection.collapseToEnd()
+        ensureCaretOutsideInlineFormatting()
+        clearInlineTypingState()
+        clearColorTypingState()
+        shouldResetInlineTypingRef.current = false
+        break
+      }
+      case 'highlight':
+        if (selection.isCollapsed || !selectedText) break
+        wrapSelectionWithStyle('backgroundColor', value || 'transparent', 'transparent')
+        selection.collapseToEnd()
+        ensureCaretOutsideInlineFormatting()
+        clearInlineTypingState()
+        clearColorTypingState()
+        shouldResetInlineTypingRef.current = false
+        break
+      case 'fontSize': {
+        const numeric = Number((value || '16px').replace('px', ''))
+        applyFontSize(Math.max(MIN_FONT_SIZE, Math.min(numeric, MAX_FONT_SIZE)))
+        return
+      }
+      case 'fontSizeIncrease': {
+        const currentSize = getFontSizeFromRange(range)
+        applyFontSize(Math.min(currentSize + FONT_SIZE_STEP, MAX_FONT_SIZE))
+        return
+      }
+      case 'fontSizeDecrease': {
+        const currentSize = getFontSizeFromRange(range)
+        applyFontSize(Math.max(currentSize - FONT_SIZE_STEP, MIN_FONT_SIZE))
+        return
+      }
+      case 'code': {
+        const codeSpan = document.createElement('code')
+        codeSpan.className = 'inline-code'
+        const codeTextNode = document.createTextNode(selectedText || '\u200B')
+        codeSpan.appendChild(codeTextNode)
+        range.deleteContents()
+        range.insertNode(codeSpan)
+        const caret = document.createRange()
+        if (selectedText) {
+          caret.setStartAfter(codeSpan)
+        } else {
+          caret.setStart(codeTextNode, codeTextNode.textContent?.length || 0)
+        }
+        caret.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(caret)
+        savedRangeRef.current = caret.cloneRange()
+        break
+      }
+      case 'heading': {
+        const headingTag = `h${value || '1'}`
+        const headingBlock = ensureIsolatedBlock() || getCurrentBlock(selection)
+        if (headingBlock && headingBlock !== editorRef.current) {
+          const newHeading = convertBlockTag(headingBlock, headingTag)
+          const next = newHeading.nextElementSibling
+          const shouldCreateParagraph =
+            !next ||
+            !['p', 'ul', 'ol', 'blockquote', 'pre', 'table', 'div'].includes(next.tagName.toLowerCase())
+          if (shouldCreateParagraph) {
+            const paragraph = document.createElement('p')
+            paragraph.appendChild(document.createElement('br'))
+            newHeading.parentNode?.insertBefore(paragraph, newHeading.nextSibling)
+          }
+        } else {
+          document.execCommand('formatBlock', false, `<${headingTag}>`)
+        }
+        setFormatState((prev) => ({ ...prev, heading: headingTag }))
+        break
+      }
+      case 'list': {
+        const alreadyInList = !!getCurrentListItem()
+        if (alreadyInList) {
+          document.execCommand(value === 'bullet' ? 'insertUnorderedList' : 'insertOrderedList', false)
+          break
+        }
+        const listBlock = ensureIsolatedBlock() || getCurrentBlock(selection)
+        if (!listBlock || listBlock === editorRef.current) {
+          document.execCommand(value === 'bullet' ? 'insertUnorderedList' : 'insertOrderedList', false)
+          break
+        }
+        const listEl = document.createElement(value === 'bullet' ? 'ul' : 'ol')
+        const newLi = document.createElement('li')
+        while (listBlock.firstChild) {
+          newLi.appendChild(listBlock.firstChild)
+        }
+        if (!newLi.innerHTML.trim()) newLi.appendChild(document.createElement('br'))
+        listEl.appendChild(newLi)
+        listBlock.appendChild(listEl)
+        const listR = document.createRange()
+        listR.selectNodeContents(newLi)
+        listR.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(listR)
+        savedRangeRef.current = listR.cloneRange()
+        break
+      }
+      case 'quote':
+        document.execCommand('formatBlock', false, '<blockquote>')
+        setFormatState((prev) => ({ ...prev, heading: null }))
+        break
+      case 'link': {
+        const active = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+          ? range.commonAncestorContainer.parentElement
+          : range.commonAncestorContainer as HTMLElement | null
+        const currentLink = active?.closest('a') as HTMLAnchorElement | null
+        const selected = selectedText.trim()
+        const rect = range.getBoundingClientRect()
+        const popoverWidth = 320
+        const left = Math.max(8, Math.min(rect.left + rect.width / 2 - popoverWidth / 2, window.innerWidth - popoverWidth - 8))
+        const top = Math.max(8, rect.bottom + 8)
+        setEditingLink({
+          element: currentLink,
+          text: currentLink?.textContent || selected || '',
+          href: currentLink?.getAttribute('href') || 'https://',
+          range: range.cloneRange(),
+          position: { top, left },
+        })
+        if (!currentLink && selected) {
+          savedRangeRef.current = range.cloneRange()
+        }
+        return
+      }
+      case 'hr':
+        document.execCommand('insertHorizontalRule', false)
+        break
+      case 'normal':
+        document.execCommand('formatBlock', false, '<p>')
+        setFormatState((prev) => ({ ...prev, heading: null }))
+        break
+      case 'table':
+        setTableRows(3)
+        setTableCols(3)
+        setIsTableDialogOpen(true)
+        return
+      case 'codeBlock':
+        insertCodeBlockAtCaret(restoreSavedSelection, getCurrentBlock, handleInput)
+        break
+      case 'formula':
+        openFormulaDialog(selectedText.trim(), null)
+        return
+      case 'tableAddRow': {
+        const cell = getCurrentTableCell()
+        if (!cell) break
+        const row = cell.parentElement as HTMLTableRowElement
+        const table = row.closest('table')
+        if (!table) break
+        const newRow = document.createElement('tr')
+        const cellsCount = row.cells.length
+        for (let i = 0; i < cellsCount; i += 1) {
+          const td = document.createElement('td')
+          td.textContent = ''
+          newRow.appendChild(td)
+        }
+        row.parentElement?.insertBefore(newRow, row.nextSibling)
+        break
+      }
+      case 'tableRemoveRow': {
+        const cell = getCurrentTableCell()
+        if (!cell) break
+        const row = cell.parentElement as HTMLTableRowElement
+        const section = row.parentElement
+        if (!section || section.children.length <= 1) break
+        section.removeChild(row)
+        break
+      }
+      case 'tableAddColumn': {
+        const cell = getCurrentTableCell()
+        if (!cell) break
+        const cellIndex = cell.cellIndex
+        const table = cell.closest('table')
+        if (!table) break
+        table.querySelectorAll('tr').forEach((tr) => {
+          const isHeader = tr.parentElement?.tagName.toLowerCase() === 'thead'
+          const newCell = document.createElement(isHeader ? 'th' : 'td')
+          newCell.textContent = ''
+          const target = tr.children[cellIndex + 1] || null
+          tr.insertBefore(newCell, target)
+        })
+        break
+      }
+      case 'tableRemoveColumn': {
+        const cell = getCurrentTableCell()
+        if (!cell) break
+        const cellIndex = cell.cellIndex
+        const table = cell.closest('table')
+        if (!table) break
+        table.querySelectorAll('tr').forEach((tr) => {
+          if (tr.children.length > 1) {
+            tr.removeChild(tr.children[cellIndex])
+          }
+        })
+        break
+      }
+    }
+
+    handleInput()
+  }, [applyFontSize, clearColorTypingState, clearInlineTypingState, convertBlockTag, ensureCaretOutsideInlineFormatting, ensureIsolatedBlock, getCurrentBlock, getCurrentListItem, getCurrentTableCell, getFontSizeFromRange, handleInput, insertCodeBlockAtCaret, openFormulaDialog, restoreSavedSelection, wrapSelectionWithStyle])
+
+  // --- Sync content to editor on external changes ---
+  useEffect(() => {
+    if (editorRef.current && !isInternalChange.current) {
+      const serializedCurrent = serializeEditorContent(editorRef.current.innerHTML)
+      if (document.activeElement !== editorRef.current && serializedCurrent !== content) {
+        editorRef.current.innerHTML = content || '<p><br></p>'
+        ensureCodeBlockControls(editorRef.current)
+        renderCodeHighlights(editorRef.current, true)
+        void resolveEditorImages(editorRef.current)
+        if (!content) {
+          savedRangeRef.current = null
+        }
+      }
+    }
+    isInternalChange.current = false
+  }, [content, ensureCodeBlockControls, renderCodeHighlights, resolveEditorImages, serializeEditorContent])
+
+  useEffect(() => {
+    if (!editorRef.current || content) return
+    ensureReadyCaretForEmptyEditor()
+  }, [content, ensureReadyCaretForEmptyEditor])
+
+  useEffect(() => {
+    if (editorRef.current && content) {
+      editorRef.current.innerHTML = content
+      void resolveEditorImages(editorRef.current)
+    }
+    try { document.execCommand('defaultParagraphSeparator', false, 'p') } catch { /* ignore */ }
+  }, [])
+
+  // --- Formula click handler ---
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
@@ -2201,6 +999,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
   }, [openFormulaDialog])
 
+  // --- Code block copy button ---
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
@@ -2265,6 +1064,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
   }, [])
 
+  // --- Code block focusout highlight + language select ---
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
@@ -2322,391 +1122,126 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
   }, [applySyntaxHighlight, handleInput])
 
-  const applyFontSize = useCallback((size: number) => {
-    const selection = restoreSavedSelection()
-    if (!selection || !selection.rangeCount || selection.isCollapsed) return
-    const range = selection.getRangeAt(0)
-    const selectedText = selection.toString()
-    if (!selectedText.trim()) return
-
-    const commonEl = (range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-      ? range.commonAncestorContainer.parentElement
-      : range.commonAncestorContainer as HTMLElement | null)
-    const existingSpan = commonEl?.closest('.font-size-span') as HTMLElement | null
-    if (existingSpan) {
-      // Only update in-place when the selection covers the ENTIRE span.
-      // Otherwise fall through to extract + wrap so only the selected
-      // portion gets the new size.
-      const spanRange = document.createRange()
-      spanRange.selectNodeContents(existingSpan)
-      const coversWholeSpan =
-        range.compareBoundaryPoints(Range.START_TO_START, spanRange) <= 0 &&
-        range.compareBoundaryPoints(Range.END_TO_END, spanRange) >= 0
-      if (coversWholeSpan) {
-        existingSpan.style.fontSize = `${size}px`
-        existingSpan.style.lineHeight = '1.6'
-        const newRange = document.createRange()
-        newRange.selectNodeContents(existingSpan)
-        selection.removeAllRanges()
-        selection.addRange(newRange)
-        savedRangeRef.current = newRange.cloneRange()
-        shouldResetInlineTypingRef.current = true
-        handleInput()
-        return
-      }
-    }
-
-    const fragment = range.extractContents()
-    const blockTags = new Set(['p', 'div', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'ul', 'ol', 'table', 'tr', 'td', 'th'])
-    const existingSizedSpans = Array.from(fragment.querySelectorAll('.font-size-span')) as HTMLElement[]
-    const containsStructuredContent =
-      existingSizedSpans.length > 0 ||
-      !!fragment.querySelector?.('p, div, li, blockquote, h1, h2, h3, h4, h5, h6, pre, ul, ol, table, tr, td, th, br')
-
-    const wrapTextNodeWithFontSize = (textNode: Text) => {
-      if (!textNode.textContent?.trim()) return
-      const parent = textNode.parentNode
-      if (!parent) return
-      if (
-        parent.nodeType === Node.ELEMENT_NODE &&
-        (parent as HTMLElement).classList.contains('font-size-span')
-      ) {
-        const parentEl = parent as HTMLElement
-        parentEl.style.fontSize = `${size}px`
-        parentEl.style.lineHeight = '1.6'
-        return
-      }
-      const fontSpan = document.createElement('span')
-      fontSpan.className = 'font-size-span'
-      fontSpan.style.fontSize = `${size}px`
-      fontSpan.style.lineHeight = '1.6'
-      parent.insertBefore(fontSpan, textNode)
-      fontSpan.appendChild(textNode)
-    }
-
-    let firstInsertedNode: Node | null = null
-    let lastInsertedNode: Node | null = null
-
-    if (containsStructuredContent) {
-      existingSizedSpans.forEach((span) => {
-        span.style.fontSize = `${size}px`
-        span.style.lineHeight = '1.6'
-      })
-
-      const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT)
-      const textNodes: Text[] = []
-      let current: Node | null = walker.nextNode()
-      while (current) {
-        const textNode = current as Text
-        let shouldWrap = !!textNode.textContent?.trim()
-        let ancestor = textNode.parentNode
-        while (shouldWrap && ancestor && ancestor !== fragment) {
-          if (
-            ancestor.nodeType === Node.ELEMENT_NODE &&
-            (ancestor as HTMLElement).classList.contains('font-size-span')
-          ) {
-            shouldWrap = false
-            break
-          }
-          if (
-            ancestor.nodeType === Node.ELEMENT_NODE &&
-            blockTags.has((ancestor as HTMLElement).tagName.toLowerCase())
-          ) {
-            break
-          }
-          ancestor = ancestor.parentNode
-        }
-        if (shouldWrap) {
-          textNodes.push(textNode)
-        }
-        current = walker.nextNode()
-      }
-
-      textNodes.forEach(wrapTextNodeWithFontSize)
-      firstInsertedNode = fragment.firstChild
-      lastInsertedNode = fragment.lastChild
-      range.insertNode(fragment)
-    } else {
-      const fontSpan = document.createElement('span')
-      fontSpan.className = 'font-size-span'
-      fontSpan.style.fontSize = `${size}px`
-      fontSpan.style.lineHeight = '1.6'
-      fontSpan.appendChild(fragment)
-      firstInsertedNode = fontSpan
-      lastInsertedNode = fontSpan
-      range.insertNode(fontSpan)
-    }
-
-    const newRange = document.createRange()
+  // --- External URL opener ---
+  const openExternalUrl = useCallback((href: string) => {
+    const url = href.trim()
+    if (!url) return
     try {
-      if (
-        firstInsertedNode &&
-        lastInsertedNode &&
-        firstInsertedNode.parentNode &&
-        lastInsertedNode.parentNode
-      ) {
-        newRange.setStartBefore(firstInsertedNode)
-        newRange.setEndAfter(lastInsertedNode)
-      } else {
-        newRange.setStart(range.startContainer, range.startOffset)
-        newRange.setEnd(range.endContainer, range.endOffset)
-      }
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.target = '_blank'
+      anchor.rel = 'noopener noreferrer'
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+      return
     } catch {
-      newRange.setStart(range.startContainer, range.startOffset)
-      newRange.setEnd(range.endContainer, range.endOffset)
+      // fallback
     }
-    selection.removeAllRanges()
-    selection.addRange(newRange)
-    savedRangeRef.current = newRange.cloneRange()
-    shouldResetInlineTypingRef.current = true
-    handleInput()
-  }, [handleInput, restoreSavedSelection])
+    try {
+      const openedWindow = window.open(url, '_blank', 'noopener,noreferrer')
+      if (openedWindow) return
+    } catch {
+      // fallback
+    }
+    try {
+      void openExternal(url)
+    } catch {
+      // ignore
+    }
+  }, [])
 
-  // Apply style to selected text
-  const applyStyle = useCallback((style: string, value?: string) => {
-    const selection = restoreSavedSelection()
-    if (!selection || !selection.rangeCount) return
-    const range = selection.getRangeAt(0)
-    const selectedText = selection.toString()
+  // --- Editor click handler ---
+  const handleEditorClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement
+    if (!editorRef.current) return
 
-    switch (style) {
-      case 'bold':
-        document.execCommand('bold', false)
-        break
-      case 'italic':
-        document.execCommand('italic', false)
-        break
-      case 'underline':
-        document.execCommand('underline', false)
-        break
-      case 'strikethrough':
-        document.execCommand('strikeThrough', false)
-        break
-      case 'color': {
-        // Avoid enabling persistent typing color when no text is selected.
-        if (selection.isCollapsed || !selectedText) {
-          break
-        }
-        wrapSelectionWithStyle('color', value || 'inherit', 'inherit')
-        // Prevent following typing from inheriting color style context.
-        selection.collapseToEnd()
-        ensureCaretOutsideInlineFormatting()
-        clearInlineTypingState()
-        clearColorTypingState()
-        shouldResetInlineTypingRef.current = false
-        break
+    const placeCaretFromPoint = () => {
+      const doc = document as Document & {
+        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
+        caretRangeFromPoint?: (x: number, y: number) => Range | null
       }
-      case 'highlight':
-        // Avoid enabling persistent typing highlight when no text is selected.
-        if (selection.isCollapsed || !selectedText) {
-          break
-        }
-        wrapSelectionWithStyle('backgroundColor', value || 'transparent', 'transparent')
-        selection.collapseToEnd()
-        ensureCaretOutsideInlineFormatting()
-        clearInlineTypingState()
-        clearColorTypingState()
-        shouldResetInlineTypingRef.current = false
-        break
-      case 'fontSize': {
-        const numeric = Number((value || '16px').replace('px', ''))
-        applyFontSize(Math.max(MIN_FONT_SIZE, Math.min(numeric, MAX_FONT_SIZE)))
-        return
+      const selection = window.getSelection()
+      if (!selection) return
+      if (selection.rangeCount > 0 && !selection.getRangeAt(0).collapsed) return
+
+      let nextRange: Range | null = null
+      const caretPosition = doc.caretPositionFromPoint?.(e.clientX, e.clientY)
+      if (caretPosition) {
+        nextRange = document.createRange()
+        nextRange.setStart(caretPosition.offsetNode, caretPosition.offset)
+        nextRange.collapse(true)
+      } else {
+        nextRange = doc.caretRangeFromPoint?.(e.clientX, e.clientY) || null
       }
-      case 'fontSizeIncrease': {
-        const currentSize = getFontSizeFromRange(range)
-        applyFontSize(Math.min(currentSize + FONT_SIZE_STEP, MAX_FONT_SIZE))
-        return
-      }
-      case 'fontSizeDecrease': {
-        const currentSize = getFontSizeFromRange(range)
-        applyFontSize(Math.max(currentSize - FONT_SIZE_STEP, MIN_FONT_SIZE))
-        return
-      }
-      case 'code': {
-        const codeSpan = document.createElement('code')
-        codeSpan.className = 'inline-code'
-        // Keep an invisible anchor so collapsed-caret insertion stays inside
-        // the inline code node across browsers.
-        const codeTextNode = document.createTextNode(selectedText || '\u200B')
-        codeSpan.appendChild(codeTextNode)
-        range.deleteContents()
-        range.insertNode(codeSpan)
-        const caret = document.createRange()
-        if (selectedText) {
-          caret.setStartAfter(codeSpan)
-        } else {
-          caret.setStart(codeTextNode, codeTextNode.textContent?.length || 0)
-        }
-        caret.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(caret)
-        savedRangeRef.current = caret.cloneRange()
-        break
-      }
-      case 'heading': {
-        const headingTag = `h${value || '1'}`
-        const headingBlock = ensureIsolatedBlock() || getCurrentBlock(selection)
-        if (headingBlock && headingBlock !== editorRef.current) {
-          const newHeading = convertBlockTag(headingBlock, headingTag)
-          const next = newHeading.nextElementSibling
-          const shouldCreateParagraph =
-            !next ||
-            !['p', 'ul', 'ol', 'blockquote', 'pre', 'table', 'div'].includes(next.tagName.toLowerCase())
-          if (shouldCreateParagraph) {
-            const paragraph = document.createElement('p')
-            paragraph.appendChild(document.createElement('br'))
-            newHeading.parentNode?.insertBefore(paragraph, newHeading.nextSibling)
-          }
-        } else {
-          document.execCommand('formatBlock', false, `<${headingTag}>`)
-        }
-        // Update format state
-        setFormatState((prev) => ({ ...prev, heading: headingTag }))
-        break
-      }
-      case 'list': {
-        const alreadyInList = !!getCurrentListItem()
-        if (alreadyInList) {
-          document.execCommand(value === 'bullet' ? 'insertUnorderedList' : 'insertOrderedList', false)
-          break
-        }
-        // Isolate the current line (splitting <br>-separated content in the
-        // same <p> if necessary) so only the caret's line becomes a list item.
-        const listBlock = ensureIsolatedBlock() || getCurrentBlock(selection)
-        if (!listBlock || listBlock === editorRef.current) {
-          document.execCommand(value === 'bullet' ? 'insertUnorderedList' : 'insertOrderedList', false)
-          break
-        }
-        const listEl = document.createElement(value === 'bullet' ? 'ul' : 'ol')
-        const newLi = document.createElement('li')
-        while (listBlock.firstChild) {
-          newLi.appendChild(listBlock.firstChild)
-        }
-        if (!newLi.innerHTML.trim()) newLi.appendChild(document.createElement('br'))
-        listEl.appendChild(newLi)
-        listBlock.appendChild(listEl)
-        const listR = document.createRange()
-        listR.selectNodeContents(newLi)
-        listR.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(listR)
-        savedRangeRef.current = listR.cloneRange()
-        break
-      }
-      case 'quote':
-        document.execCommand('formatBlock', false, '<blockquote>')
-        setFormatState((prev) => ({ ...prev, heading: null }))
-        break
-      case 'link': {
-        const active = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-          ? range.commonAncestorContainer.parentElement
-          : range.commonAncestorContainer as HTMLElement | null
-        const currentLink = active?.closest('a') as HTMLAnchorElement | null
-        const selected = selectedText.trim()
-        const rect = range.getBoundingClientRect()
-        const popoverWidth = 320
-        const left = Math.max(8, Math.min(rect.left + rect.width / 2 - popoverWidth / 2, window.innerWidth - popoverWidth - 8))
-        const top = Math.max(8, rect.bottom + 8)
-        setEditingLink({
-          element: currentLink,
-          text: currentLink?.textContent || selected || '',
-          href: currentLink?.getAttribute('href') || 'https://',
-          range: range.cloneRange(),
-          position: { top, left },
-        })
-        if (!currentLink && selected) {
-          savedRangeRef.current = range.cloneRange()
-        }
-        return
-      }
-      case 'hr':
-        document.execCommand('insertHorizontalRule', false)
-        break
-      case 'normal':
-        document.execCommand('formatBlock', false, '<p>')
-        setFormatState((prev) => ({ ...prev, heading: null }))
-        break
-      case 'table':
-        {
-          const rowsInput = prompt('表格行数（>=1）', '3')
-          const colsInput = prompt('表格列数（>=1）', '3')
-          const rows = Math.max(1, Number(rowsInput || 3) || 3)
-          const cols = Math.max(1, Number(colsInput || 3) || 3)
-          const headers = Array.from({ length: cols }, (_, i) => `<th>Header ${i + 1}</th>`).join('')
-          const bodyRows = Array.from({ length: rows - 1 }, (_, rowIndex) => {
-            const cells = Array.from({ length: cols }, (_, colIndex) => `<td>Cell ${rowIndex + 1}-${colIndex + 1}</td>`).join('')
-            return `<tr>${cells}</tr>`
-          }).join('')
-          insertHtmlAtCaret(`<table><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table><p><br></p>`)
-        }
-        break
-      case 'codeBlock':
-        insertCodeBlockAtCaret()
-        break
-      case 'formula':
-        openFormulaDialog(selectedText.trim(), null)
-        return
-      case 'tableAddRow': {
-        const cell = getCurrentTableCell()
-        if (!cell) break
-        const row = cell.parentElement as HTMLTableRowElement
-        const table = row.closest('table')
-        if (!table) break
-        const newRow = document.createElement('tr')
-        const cellsCount = row.cells.length
-        for (let i = 0; i < cellsCount; i += 1) {
-          const td = document.createElement('td')
-          td.textContent = ''
-          newRow.appendChild(td)
-        }
-        row.parentElement?.insertBefore(newRow, row.nextSibling)
-        break
-      }
-      case 'tableRemoveRow': {
-        const cell = getCurrentTableCell()
-        if (!cell) break
-        const row = cell.parentElement as HTMLTableRowElement
-        const section = row.parentElement
-        if (!section || section.children.length <= 1) break
-        section.removeChild(row)
-        break
-      }
-      case 'tableAddColumn': {
-        const cell = getCurrentTableCell()
-        if (!cell) break
-        const cellIndex = cell.cellIndex
-        const table = cell.closest('table')
-        if (!table) break
-        table.querySelectorAll('tr').forEach((tr) => {
-          const isHeader = tr.parentElement?.tagName.toLowerCase() === 'thead'
-          const newCell = document.createElement(isHeader ? 'th' : 'td')
-          newCell.textContent = ''
-          const target = tr.children[cellIndex + 1] || null
-          tr.insertBefore(newCell, target)
-        })
-        break
-      }
-      case 'tableRemoveColumn': {
-        const cell = getCurrentTableCell()
-        if (!cell) break
-        const cellIndex = cell.cellIndex
-        const table = cell.closest('table')
-        if (!table) break
-        table.querySelectorAll('tr').forEach((tr) => {
-          if (tr.children.length > 1) {
-            tr.removeChild(tr.children[cellIndex])
-          }
-        })
-        break
-      }
+
+      if (!nextRange || !editorRef.current?.contains(nextRange.startContainer)) return
+      selection.removeAllRanges()
+      selection.addRange(nextRange)
+      savedRangeRef.current = nextRange.cloneRange()
     }
 
-    // Trigger content update
-    handleInput()
-  }, [applyFontSize, clearColorTypingState, clearInlineTypingState, ensureCaretOutsideInlineFormatting, ensureIsolatedBlock, getCurrentBlock, getCurrentListItem, getCurrentTableCell, getFontSizeFromRange, handleInput, insertCodeBlockAtCaret, insertHtmlAtCaret, openFormulaDialog, restoreSavedSelection, wrapSelectionWithStyle])
+    const formula = target.closest('.formula-inline')
+    if (formula) return
 
-  // Handle keyboard shortcuts
+    const link = target.closest('a') as HTMLAnchorElement | null
+    if (link && editorRef.current.contains(link)) {
+      if (e.metaKey || e.ctrlKey) {
+        e.preventDefault()
+        const href = link.getAttribute('href') || link.href || ''
+        if (href) {
+          try {
+            const anchor = document.createElement('a')
+            anchor.href = href
+            anchor.target = '_blank'
+            anchor.rel = 'noopener noreferrer'
+            document.body.appendChild(anchor)
+            anchor.click()
+            document.body.removeChild(anchor)
+            return
+          } catch {
+            // fallback
+          }
+          try {
+            const openedWindow = window.open(href, '_blank', 'noopener,noreferrer')
+            if (openedWindow) return
+          } catch {
+            // fallback
+          }
+          void openExternal(href).catch(() => {})
+        }
+        return
+      }
+      e.preventDefault()
+      const rect = link.getBoundingClientRect()
+      const popoverWidth = 320
+      const left = Math.max(8, Math.min(rect.left + rect.width / 2 - popoverWidth / 2, window.innerWidth - popoverWidth - 8))
+      const top = Math.max(8, rect.bottom + 8)
+      setEditingLink({
+        element: link,
+        text: link.textContent || '',
+        href: link.getAttribute('href') || '',
+        range: null,
+        position: { top, left },
+      })
+      return
+    }
+
+    if (target.tagName === 'IMG') {
+      const image = target as HTMLImageElement
+      setSelectedImage(image)
+      setEditingLink(null)
+      recalcSelectedImageOverlay(image)
+      return
+    }
+
+    setEditingLink(null)
+    setSelectedImage(null)
+    setImageOverlayRect(null)
+    placeCaretFromPoint()
+  }, [recalcSelectedImageOverlay, setImageOverlayRect, setSelectedImage])
+
+  // --- Keyboard handler ---
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.nativeEvent.isComposing || isComposingRef.current || (e.nativeEvent as KeyboardEvent).keyCode === 229) return
 
@@ -2772,8 +1307,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       return
     }
 
-    // Block-level markdown shortcuts (## , - , 1. , ---, etc.) must be checked
-    // BEFORE the generic Enter handler which would consume the event.
     if (e.key === 'Enter' && !e.shiftKey && applyMarkdownShortcut(e)) return
 
     if (e.key === 'Enter' && e.shiftKey) {
@@ -2787,8 +1320,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
 
     if (e.key === 'Enter' && !e.shiftKey) {
       const inList = isCaretInsideList()
-      // Keep native behavior inside lists; in normal paragraphs we keep line
-      // breaks in the same paragraph block for a Notion-like writing flow.
       if (!inList) {
         e.preventDefault()
         if (!splitParagraphAtCaret()) {
@@ -2809,7 +1340,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           shouldResetInlineTypingRef.current = false
           return
         }
-        // Normal Enter is already handled above.
         shouldResetInlineTypingRef.current = false
         return
       } else if (
@@ -2847,12 +1377,11 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       }
     }
 
-    // Handle Tab for indentation
     if (e.key === 'Tab') {
       e.preventDefault()
       document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;')
     }
-  }, [applyInlineMarkdownShortcut, applyMarkdownShortcut, applyStyle, clearColorTypingState, clearInlineTypingState, ensureCaretOutsideInlineFormatting, exitCurrentBlockWithNewParagraph, exitHeadingWithParagraph, handleInput, handleListEnter, insertNewLineInCodeBlock, insertSoftBreakAtCaret, isCaretInsideInlineFormatting, isCaretInsideList, isSelectionInsideCodeBlock, removeSingleEmptyListAtCaret, resizeSelectedImageByFactor, scrollCaretIntoView, selectedImage, splitParagraphAtCaret])
+  }, [applyInlineMarkdownShortcut, applyMarkdownShortcut, applyStyle, clearColorTypingState, clearInlineTypingState, exitCurrentBlockWithNewParagraph, exitHeadingWithParagraph, handleInput, handleListEnter, insertNewLineInCodeBlock, insertSoftBreakAtCaret, isCaretInsideList, isSelectionInsideCodeBlock, removeSingleEmptyListAtCaret, resizeSelectedImageByFactor, scrollCaretIntoView, selectedImage, setImageOverlayRect, setSelectedImage, splitParagraphAtCaret])
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
@@ -3047,6 +1576,44 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         </div>
       )}
 
+      <Dialog open={isTableDialogOpen} onOpenChange={setIsTableDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>插入表格</DialogTitle>
+            <DialogDescription>设置表格的行数和列数</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium">行数</label>
+              <Input
+                type="number"
+                min={1}
+                max={50}
+                value={tableRows}
+                onChange={(e) => setTableRows(Math.max(1, Number(e.target.value) || 1))}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">列数</label>
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={tableCols}
+                onChange={(e) => setTableCols(Math.max(1, Number(e.target.value) || 1))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTableDialogOpen(false)}>取消</Button>
+            <Button onClick={() => {
+              insertTableAtCaret(tableRows, tableCols)
+              setIsTableDialogOpen(false)
+            }}>插入</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isFormulaDialogOpen} onOpenChange={setIsFormulaDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -3075,358 +1642,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
-      <style jsx global>{`
-        .prose-editor:empty:before {
-          content: attr(data-placeholder);
-          color: #9ca3af;
-          pointer-events: none;
-          position: absolute;
-          left: 2rem;
-          top: 2rem;
-        }
-        
-        .prose-editor {
-          font-size: var(--pmd-base-font-size, 17px);
-          line-height: var(--pmd-line-height, 1.68);
-          letter-spacing: var(--pmd-letter-spacing, 0em);
-          --pmd-link-color: #3b82f6;
-          --pmd-code-bg: var(--muted);
-          --pmd-code-fg: var(--foreground);
-          --pmd-code-border: var(--border);
-          --pmd-table-border: var(--border);
-          --pmd-table-header-bg: var(--muted);
-          --pmd-table-cell-bg: transparent;
-          --pmd-formula-bg: transparent;
-          --pmd-formula-fg: var(--foreground);
-          --pmd-formula-border: var(--border);
-        }
-        
-        .prose-editor p {
-          line-height: var(--pmd-line-height, 1.68);
-          margin-top: var(--pmd-paragraph-spacing, 0.55em);
-          margin-bottom: var(--pmd-paragraph-spacing, 0.55em);
-        }
-        
-        /* Font size spans - maintain consistent line height */
-        .prose-editor .font-size-span {
-          display: inline;
-          line-height: inherit;
-          vertical-align: baseline;
-        }
-        
-        .prose-editor .inline-code,
-        .prose-editor code {
-          background-color: rgba(135, 131, 120, 0.15);
-          color: #eb5757;
-          padding: 0.2em 0.4em;
-          margin: 0;
-          font-size: 85%;
-          border-radius: 3px;
-          font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-        }
-        
-        .prose-editor h1 {
-          font-size: var(--pmd-h1-size, 2em);
-          font-weight: 700;
-          margin-bottom: 0.5em;
-          margin-top: 0.5em;
-          color: var(--foreground);
-          line-height: 1.2;
-        }
-        
-        .prose-editor h2 {
-          font-size: var(--pmd-h2-size, 1.5em);
-          font-weight: 600;
-          margin-bottom: 0.5em;
-          margin-top: 0.5em;
-          color: var(--foreground);
-          line-height: 1.3;
-        }
-        
-        .prose-editor h3 {
-          font-size: var(--pmd-h3-size, 1.25em);
-          font-weight: 600;
-          margin-bottom: 0.5em;
-          margin-top: 0.5em;
-          color: var(--foreground);
-          line-height: 1.4;
-        }
-        
-        .prose-editor pre {
-          background-color: var(--pmd-code-bg);
-          color: var(--pmd-code-fg);
-          border: 1px solid var(--pmd-code-border);
-          padding: 1em;
-          border-radius: 6px;
-          overflow-x: auto;
-          white-space: pre-wrap;
-          line-height: 1.45;
-          min-height: 3.2em;
-        }
 
-        .prose-editor .code-block-wrapper {
-          position: relative;
-          margin: 1em 0;
-        }
-
-        .prose-editor .code-block-wrapper pre {
-          margin: 0;
-          border-radius: 8px;
-        }
-
-        .prose-editor .code-controls {
-          position: absolute;
-          right: 0.75rem;
-          top: -0.55rem;
-          display: inline-flex;
-          align-items: center;
-          gap: 0.35rem;
-          padding: 0.22rem 0.28rem;
-          border-radius: 999px;
-          border: 1px solid color-mix(in oklch, var(--pmd-code-border) 86%, transparent);
-          background: color-mix(in oklch, var(--background) 92%, transparent);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
-          z-index: 2;
-          pointer-events: auto;
-        }
-
-        .prose-editor .code-copy-btn {
-          position: static;
-          height: 1.52rem;
-          min-width: 1.52rem;
-          border-radius: 999px;
-          border: 1px solid var(--pmd-code-border);
-          background: color-mix(in oklch, var(--background) 96%, transparent);
-          color: var(--muted-foreground);
-          font-size: 0.78rem;
-          line-height: 1;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.15s ease;
-          user-select: none;
-          pointer-events: auto;
-          opacity: 0.95;
-        }
-
-        .prose-editor .code-lang-select {
-          position: static;
-          height: 1.55rem;
-          max-width: 8.6rem;
-          border: 1px solid var(--pmd-code-border);
-          border-radius: 999px;
-          background: color-mix(in oklch, var(--background) 95%, transparent);
-          color: var(--muted-foreground);
-          font-size: 11px;
-          font-weight: 500;
-          padding: 0 0.6rem;
-          outline: none;
-          cursor: pointer;
-        }
-
-        .prose-editor .code-copy-btn:hover {
-          color: var(--foreground);
-          border-color: var(--foreground);
-        }
-
-        .prose-editor .code-lang-select:hover,
-        .prose-editor .code-lang-select:focus {
-          color: var(--foreground);
-          border-color: var(--foreground);
-        }
-
-        .prose-editor .code-copy-toast {
-          position: absolute;
-          right: 0.82rem;
-          top: 1.48rem;
-          opacity: 0;
-          transform: translateY(4px);
-          pointer-events: none;
-          border-radius: 0.4rem;
-          background: var(--foreground);
-          color: var(--background);
-          font-size: 11px;
-          line-height: 1;
-          padding: 0.3rem 0.45rem;
-          transition: all 0.2s ease;
-        }
-
-        .prose-editor .code-copy-toast.show {
-          opacity: 1;
-          transform: translateY(0);
-        }
-        
-        .prose-editor pre code {
-          background-color: transparent;
-          color: inherit;
-          padding: 0;
-          font-size: 1em;
-          display: block;
-          box-sizing: border-box;
-          width: 100%;
-          min-width: 100%;
-          min-height: 1.45em;
-          line-height: 1.45;
-          white-space: pre-wrap;
-        }
-
-        .prose-editor pre code[data-highlighted='true'] .hljs {
-          background: transparent;
-        }
-
-        .prose-editor p {
-          line-height: 1.68;
-          min-height: 1.68em;
-          white-space: pre-wrap;
-          color: var(--foreground);
-          caret-color: var(--foreground);
-        }
-
-        /* Prevent paragraph-box border/background leaking into headings that may
-           end up as direct children of a <p> via browser formatBlock behavior. */
-        .prose-editor p:has(> h1, > h2, > h3, > h4, > h5, > h6) {
-          border: none !important;
-          background: none !important;
-          box-shadow: none !important;
-          padding-left: 0 !important;
-          padding-right: 0 !important;
-        }
-        
-        .prose-editor blockquote {
-          border-left: 3px solid var(--border);
-          padding-left: 1em;
-          color: var(--muted-foreground);
-          margin: 1em 0;
-          background-color: rgba(0,0,0,0.05);
-          padding: 0.5em 1em;
-          border-radius: 0 4px 4px 0;
-        }
-        
-        .dark .prose-editor blockquote {
-          background-color: rgba(255,255,255,0.05);
-        }
-        
-        .prose-editor ul,
-        .prose-editor ol {
-          padding-left: 1.5em;
-          margin: 0.5em 0;
-        }
-        
-        .prose-editor ul {
-          list-style-type: disc;
-        }
-        
-        .prose-editor ol {
-          list-style-type: decimal;
-        }
-        
-        .prose-editor li {
-          margin: 0.25em 0;
-          display: list-item;
-        }
-        
-        .prose-editor ul ul {
-          list-style-type: circle;
-        }
-        
-        .prose-editor ul ul ul {
-          list-style-type: square;
-        }
-        
-        .prose-editor ol ol {
-          list-style-type: lower-alpha;
-        }
-        
-        .prose-editor ol ol ol {
-          list-style-type: lower-roman;
-        }
-        
-        .prose-editor a {
-          color: var(--pmd-link-color);
-          text-decoration: underline;
-          cursor: pointer;
-        }
-        
-        .prose-editor hr {
-          border: none;
-          border-top: 1px solid var(--border);
-          margin: 2em 0;
-        }
-        
-        .prose-editor img {
-          max-width: 100%;
-          height: auto;
-          border-radius: 6px;
-          cursor: pointer;
-          user-select: none;
-        }
-        
-        .prose-editor table {
-          border-collapse: collapse;
-          width: 100%;
-          margin: 1em 0;
-        }
-        
-        .prose-editor th,
-        .prose-editor td {
-          border: 1px solid var(--pmd-table-border);
-          padding: 0.5em 1em;
-          background: var(--pmd-table-cell-bg);
-        }
-        
-        .prose-editor th {
-          background-color: var(--pmd-table-header-bg);
-          font-weight: 600;
-        }
-
-        .prose-editor .formula-inline {
-          display: inline-flex;
-          align-items: center;
-          border: 1px solid var(--pmd-formula-border);
-          border-radius: 4px;
-          padding: 0.1em 0.3em;
-          margin: 0 0.1em;
-          color: var(--pmd-formula-fg);
-          background: var(--pmd-formula-bg);
-          cursor: pointer;
-        }
-
-        .prose-editor .formula-inline[data-empty='true'] {
-          opacity: 0.8;
-          border-style: dashed;
-        }
-
-        .prose-editor .formula-inline .katex {
-          color: var(--pmd-formula-fg);
-        }
-
-        .prose-editor .formula-inline-placeholder {
-          color: var(--muted-foreground);
-          font-size: 0.85em;
-        }
-        
-        .prose-editor strong,
-        .prose-editor b {
-          font-weight: 600;
-        }
-        
-        .prose-editor em,
-        .prose-editor i {
-          font-style: italic;
-        }
-        
-        .prose-editor u {
-          text-decoration: underline;
-        }
-        
-        .prose-editor s,
-        .prose-editor strike,
-        .prose-editor del {
-          text-decoration: line-through;
-        }
-      `}</style>
     </div>
   )
 }
