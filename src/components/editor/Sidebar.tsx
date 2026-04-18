@@ -140,12 +140,14 @@ export function Sidebar({ onExport }: SidebarProps) {
   const [viewMode, setViewMode] = useState<'documents' | 'outline'>('documents')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
   const [selectionStats, setSelectionStats] = useState({
+    documentId: '',
     hasSelection: false,
     charCount: 0,
     wordCount: 0,
   })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mdFileInputRef = useRef<HTMLInputElement>(null)
+  const currentDocumentId = currentDocument?.id || ''
 
   useEffect(() => {
     const handleSelectionStats = (event: Event) => {
@@ -155,6 +157,7 @@ export function Sidebar({ onExport }: SidebarProps) {
         wordCount?: number
       }>
       setSelectionStats({
+        documentId: currentDocumentId,
         hasSelection: !!customEvent.detail?.hasSelection,
         charCount: customEvent.detail?.charCount || 0,
         wordCount: customEvent.detail?.wordCount || 0,
@@ -165,15 +168,16 @@ export function Sidebar({ onExport }: SidebarProps) {
     return () => {
       window.removeEventListener('editor-selection-stats', handleSelectionStats)
     }
-  }, [])
+  }, [currentDocumentId])
 
-  useEffect(() => {
-    setSelectionStats({
-      hasSelection: false,
-      charCount: 0,
-      wordCount: 0,
-    })
-  }, [currentDocument?.id])
+  const activeSelectionStats = selectionStats.documentId === currentDocumentId
+    ? selectionStats
+    : {
+        documentId: currentDocumentId,
+        hasSelection: false,
+        charCount: 0,
+        wordCount: 0,
+      }
 
   const filteredDocuments = documents.filter((doc) => {
     if (!searchQuery) return true
@@ -574,8 +578,8 @@ export function Sidebar({ onExport }: SidebarProps) {
           const text = (currentDocument.content || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
           const charCount = text.length
           const wordCount = text ? text.split(/\s+/).length : 0
-          if (selectionStats.hasSelection) {
-            return <div>已选 {selectionStats.charCount} 字符 · {selectionStats.wordCount} 词</div>
+                if (activeSelectionStats.hasSelection) {
+                  return <div>已选 {activeSelectionStats.charCount} 字符 · {activeSelectionStats.wordCount} 词</div>
           }
           return <div>全文 {charCount} 字符 · {wordCount} 词</div>
         })()}

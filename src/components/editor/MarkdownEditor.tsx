@@ -299,6 +299,15 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         else textNode.textContent = cleaned
       }
 
+      Array.from(editor.querySelectorAll('span, font')).forEach((node) => {
+        const element = node as HTMLElement
+        const text = (element.textContent || '').replace(/\u200B/g, '').trim()
+        const hasMeaningfulChildren = !!element.querySelector('img, br, table, hr, pre, ul, ol, blockquote, code')
+        if (!text && !hasMeaningfulChildren) {
+          element.remove()
+        }
+      })
+
       const blockTags = new Set([
         'p', 'div', 'pre', 'blockquote', 'ul', 'ol', 'li',
         'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table',
@@ -656,12 +665,159 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       if (!selection || selection.isCollapsed || !selection.rangeCount) return false
 
       const range = selection.getRangeAt(0)
-      const extracted = range.extractContents()
+      const originalRange = range.cloneRange()
+      const styleProperty = property === 'color' ? 'color' : 'background-color'
+      const styleKey = property === 'color' ? 'color' : 'backgroundColor'
 
-      const allElements = extracted.querySelectorAll('*')
-      allElements.forEach((el) => {
-        (el as HTMLElement).style.removeProperty(property === 'color' ? 'color' : 'background-color')
-      })
+      const cleanupNode = (node: Node) => {
+        if (node.nodeType !== Node.ELEMENT_NODE) return
+        const element = node as HTMLElement
+
+        element.style.removeProperty(styleProperty)
+        if (!element.getAttribute('style')?.trim()) {
+          element.removeAttribute('style')
+        }
+
+        Array.from(element.childNodes).forEach(cleanupNode)
+
+        const isDisposableWrapper =
+          ['SPAN', 'FONT'].includes(element.tagName) &&
+          element.attributes.length === 0
+
+        if (isDisposableWrapper && element.parentNode) {
+          while (element.firstChild) {
+            element.parentNode.insertBefore(element.firstChild, element)
+          }
+          element.remove()
+        }
+      }
+
+      const splitStyledAncestorForClear = (workingRange: Range) => {
+        let candidate =
+          workingRange.startContainer.nodeType === Node.ELEMENT_NODE
+            ? workingRange.startContainer as HTMLElement
+            : workingRange.startContainer.parentElement
+
+        while (candidate && candidate !== editorRef.current) {
+          if (candidate.style[styleKey as 'color' | 'backgroundColor']) {
+            break
+          }
+          candidate = candidate.parentElement
+        }
+
+        const styledAncestor = candidate
+        if (!styledAncestor || !styledAncestor.parentNode || !styledAncestor.contains(workingRange.endContainer)) {
+          return false
+        }
+
+        const endMarker = document.createComment('style-clear-end')
+        const endRange = workingRange.cloneRange()
+        endRange.collapse(false)
+        endRange.insertNode(endMarker)
+
+        const startMarker = document.createComment('style-clear-start')
+        const startRange = workingRange.cloneRange()
+        startRange.collapse(true)
+        startRange.insertNode(startMarker)
+
+        const selectedWrapper = styledAncestor.cloneNode(false) as HTMLElement
+        selectedWrapper.style.removeProperty(styleProperty)
+        if (!selectedWrapper.getAttribute('style')?.trim()) {
+          selectedWrapper.removeAttribute('style')
+        }
+
+        let current = startMarker.nextSibling
+        while (current && current !== endMarker) {
+          const next = current.nextSibling
+          selectedWrapper.appendChild(current)
+          current = next
+        }
+
+        Array.from(selectedWrapper.childNodes).forEach(cleanupNode)
+
+        const trailingWrapper = styledAncestor.cloneNode(false) as HTMLElement
+        current = endMarker.nextSibling
+        while (current) {
+          const next = current.nextSibling
+          trailingWrapper.appendChild(current)
+          current = next
+        }
+
+        endMarker.remove()
+        startMarker.remove()
+
+        const parent = styledAncestor.parentNode
+        const insertAfter = (node: Node, target: Node) => {
+          parent.insertBefore(node, target.nextSibling)
+        }
+
+        const appendSelectedNode = () => {
+          if (
+            ['SPAN', 'FONT'].includes(selectedWrapper.tagName) &&
+            selectedWrapper.attributes.length === 0
+          ) {
+            const fragment = document.createDocumentFragment()
+            while (selectedWrapper.firstChild) {
+              fragment.appendChild(selectedWrapper.firstChild)
+            }
+            insertAfter(fragment, styledAncestor)
+            return styledAncestor.nextSibling
+          }
+
+          insertAfter(selectedWrapper, styledAncestor)
+          return selectedWrapper
+        }
+
+        const insertedSelectedNode = appendSelectedNode()
+
+        if (trailingWrapper.childNodes.length > 0) {
+          if (!trailingWrapper.getAttribute('style')?.trim()) {
+            trailingWrapper.removeAttribute('style')
+          }
+          if (
+            insertedSelectedNode &&
+            ['SPAN', 'FONT'].includes(trailingWrapper.tagName) &&
+            trailingWrapper.attributes.length === 0
+          ) {
+            const fragment = document.createDocumentFragment()
+            while (trailingWrapper.firstChild) {
+              fragment.appendChild(trailingWrapper.firstChild)
+            }
+            parent.insertBefore(fragment, insertedSelectedNode.nextSibling)
+          } else if (insertedSelectedNode) {
+            parent.insertBefore(trailingWrapper, insertedSelectedNode.nextSibling)
+          }
+        }
+
+        if (!styledAncestor.textContent && styledAncestor.childNodes.length === 0) {
+          styledAncestor.remove()
+        } else if (
+          ['SPAN', 'FONT'].includes(styledAncestor.tagName) &&
+          styledAncestor.attributes.length === 1 &&
+          styledAncestor.getAttribute('style')
+        ) {
+          const text = styledAncestor.textContent?.replace(/\u200b/g, '').trim()
+          if (!text) {
+            styledAncestor.remove()
+          }
+        }
+
+        const caret = document.createRange()
+        const caretTarget = insertedSelectedNode || styledAncestor
+        caret.setStartAfter(caretTarget)
+        caret.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(caret)
+        savedRangeRef.current = caret.cloneRange()
+        return true
+      }
+
+      if (value === clearToken && splitStyledAncestorForClear(originalRange)) {
+        return true
+      }
+
+      const extracted = range.extractContents()
+      Array.from(extracted.childNodes).forEach(cleanupNode)
 
       if (value === clearToken) {
         const marker = document.createTextNode('')
@@ -689,7 +845,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         return true
       }
     },
-    [restoreSavedSelection]
+    [editorRef, restoreSavedSelection]
   )
 
   const insertHtmlAtCaret = useCallback((html: string) => {
@@ -1443,6 +1599,24 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
 
     const isModKey = e.ctrlKey || e.metaKey
 
+    if (e.altKey && e.shiftKey && e.code === 'Digit5' && !isModKey) {
+      e.preventDefault()
+      applyStyle('strikethrough')
+      return
+    }
+
+    if (isModKey && (e.shiftKey || e.altKey) && e.code === 'Digit8') {
+      e.preventDefault()
+      applyStyle('list', 'bullet')
+      return
+    }
+
+    if (isModKey && (e.shiftKey || e.altKey) && e.code === 'Digit7') {
+      e.preventDefault()
+      applyStyle('list', 'ordered')
+      return
+    }
+
     if (isModKey && !e.altKey) {
       const key = e.key.toLowerCase()
 
@@ -1462,17 +1636,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         return
       }
 
-      if (e.shiftKey && e.code === 'Digit8') {
-        e.preventDefault()
-        applyStyle('list', 'bullet')
-        return
-      }
-
-      if (e.shiftKey && e.code === 'Digit7') {
-        e.preventDefault()
-        applyStyle('list', 'ordered')
-        return
-      }
     }
 
     if ((e.key === 'Backspace' || e.key === 'Delete') && removeSingleEmptyListAtCaret()) {

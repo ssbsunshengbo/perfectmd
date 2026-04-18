@@ -3,14 +3,26 @@ import hljs from 'highlight.js/lib/common'
 import { CODE_LANGUAGES, type EditorRefs } from './editor-types'
 
 export function useCodeBlocks(refs: EditorRefs) {
-  const { editorRef } = refs
+  const { editorRef, savedRangeRef } = refs
+
+  const resetCodeLanguageClasses = useCallback((codeEl: HTMLElement, language: string) => {
+    const classesToRemove = Array.from(codeEl.classList).filter(
+      (className) => className === 'hljs' || className.startsWith('language-')
+    )
+    if (classesToRemove.length > 0) {
+      codeEl.classList.remove(...classesToRemove)
+    }
+    if (language && language !== 'plaintext') {
+      codeEl.classList.add(`language-${language}`)
+    }
+  }, [])
 
   const normalizeCodeBlockToPlainText = useCallback((codeEl: HTMLElement) => {
     const rawText = codeEl.textContent || ''
     codeEl.textContent = rawText
     codeEl.removeAttribute('data-highlighted')
-    codeEl.classList.remove('hljs')
-  }, [])
+    resetCodeLanguageClasses(codeEl, 'plaintext')
+  }, [resetCodeLanguageClasses])
 
   const applySyntaxHighlight = useCallback((codeEl: HTMLElement, language: string, force = false) => {
     const selection = window.getSelection()
@@ -27,17 +39,18 @@ export function useCodeBlocks(refs: EditorRefs) {
       return
     }
     try {
+      resetCodeLanguageClasses(codeEl, language)
       const highlighted = hljs.highlight(rawText, {
         language,
         ignoreIllegals: true,
       }).value
       codeEl.innerHTML = highlighted || rawText
-      codeEl.setAttribute('data-highlighted', 'true')
       codeEl.classList.add('hljs')
+      codeEl.setAttribute('data-highlighted', 'true')
     } catch {
       normalizeCodeBlockToPlainText(codeEl)
     }
-  }, [normalizeCodeBlockToPlainText])
+  }, [normalizeCodeBlockToPlainText, resetCodeLanguageClasses])
 
   const renderCodeHighlights = useCallback((editor: HTMLDivElement, force = false) => {
     const wrappers = editor.querySelectorAll('.code-block-wrapper')
@@ -97,7 +110,7 @@ export function useCodeBlocks(refs: EditorRefs) {
         copyBtn.className = 'code-copy-btn'
         copyBtn.setAttribute('contenteditable', 'false')
         copyBtn.setAttribute('data-copy-code-btn', 'true')
-        copyBtn.title = 'Copy code'
+        copyBtn.title = '复制代码'
         copyBtn.innerHTML = '⧉'
         controls.appendChild(copyBtn)
       }
@@ -125,9 +138,9 @@ export function useCodeBlocks(refs: EditorRefs) {
     caret.collapse(true)
     selection.removeAllRanges()
     selection.addRange(caret)
-    refs.savedRangeRef.current = caret.cloneRange()
+    savedRangeRef.current = caret.cloneRange()
     return true
-  }, [refs.savedRangeRef])
+  }, [savedRangeRef])
 
   const insertCodeBlockAtCaret = useCallback((
     restoreSavedSelection: () => Selection | null,
@@ -168,7 +181,7 @@ export function useCodeBlocks(refs: EditorRefs) {
     copyButton.className = 'code-copy-btn'
     copyButton.setAttribute('contenteditable', 'false')
     copyButton.setAttribute('data-copy-code-btn', 'true')
-    copyButton.title = 'Copy code'
+    copyButton.title = '复制代码'
     copyButton.innerHTML = '⧉'
     controls.appendChild(langSelect)
     controls.appendChild(copyButton)
@@ -203,9 +216,9 @@ export function useCodeBlocks(refs: EditorRefs) {
     caret.collapse(true)
     selection.removeAllRanges()
     selection.addRange(caret)
-    refs.savedRangeRef.current = caret.cloneRange()
+    savedRangeRef.current = caret.cloneRange()
     handleInput()
-  }, [editorRef, refs.savedRangeRef])
+  }, [editorRef, savedRangeRef])
 
   return {
     normalizeCodeBlockToPlainText,

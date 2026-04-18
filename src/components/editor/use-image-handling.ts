@@ -2,6 +2,13 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import type { EditorRefs, ImageOverlayRect } from './editor-types'
 import { saveImageBlob } from '@/store/editor-store'
 
+function setImageDimensions(imageEl: HTMLImageElement, width: number, height: number) {
+  imageEl.style.width = `${width}px`
+  imageEl.style.height = `${height}px`
+  imageEl.removeAttribute('width')
+  imageEl.removeAttribute('height')
+}
+
 export function useImageHandling(
   refs: EditorRefs,
   handleInput: () => void,
@@ -69,10 +76,7 @@ export function useImageHandling(
     const ratio = currentHeight > 0 ? currentWidth / currentHeight : 1
     const nextWidth = Math.max(60, Math.min(2400, Math.round(currentWidth * factor)))
     const nextHeight = Math.max(40, Math.round(nextWidth / (ratio || 1)))
-    image.style.width = `${nextWidth}px`
-    image.style.height = `${nextHeight}px`
-    image.removeAttribute('width')
-    image.removeAttribute('height')
+    setImageDimensions(image, nextWidth, nextHeight)
     recalcSelectedImageOverlay(image)
     handleInput()
   }, [handleInput, recalcSelectedImageOverlay, selectedImage])
@@ -98,10 +102,7 @@ export function useImageHandling(
       const signX = drag.corner === 'sw' || drag.corner === 'nw' ? -1 : 1
       const nextWidth = Math.max(60, drag.startWidth + dx * signX)
       const nextHeight = Math.max(40, nextWidth / drag.ratio)
-      selectedImage.style.width = `${Math.round(nextWidth)}px`
-      selectedImage.style.height = `${Math.round(nextHeight)}px`
-      selectedImage.removeAttribute('width')
-      selectedImage.removeAttribute('height')
+      setImageDimensions(selectedImage, Math.round(nextWidth), Math.round(nextHeight))
       recalcSelectedImageOverlay()
     }
     const handleMouseUp = () => {

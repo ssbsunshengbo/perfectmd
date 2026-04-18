@@ -199,12 +199,8 @@ body {
     linear-gradient(180deg, #090412 0%, #0e1327 55%, #100a1c 100%);
 }
 
-.prose-editor p {
-  border: 1px solid rgba(196, 181, 253, 0.16);
-  border-radius: 10px;
-  padding: 0.45rem 0.7rem;
-  margin: 0.55rem 0;
-  background: rgba(255, 255, 255, 0.015);
+.prose-editor .code-block-wrapper pre {
+  box-shadow: 0 18px 36px rgba(5, 10, 26, 0.38);
 }
 
 .prose-editor h1, .prose-editor h2, .prose-editor h3 {
@@ -246,11 +242,9 @@ const PAPER_SERIF_TEMPLATE_CSS = `:root {
   --pmd-formula-border: #c8b292;
 }
 .prose-editor { font-family: 'Iowan Old Style', 'Times New Roman', serif; }
-.prose-editor p {
-  border-left: 3px solid rgba(139, 90, 43, 0.28);
-  background: rgba(255, 250, 242, 0.55);
-  padding: 0.45rem 0.9rem;
-  border-radius: 0 10px 10px 0;
+.prose-editor blockquote {
+  background: rgba(255, 250, 242, 0.7);
+  border-left-color: rgba(139, 90, 43, 0.38);
 }
 .prose-editor h1, .prose-editor h2, .prose-editor h3 {
   color: #5e3f1b;
@@ -288,11 +282,8 @@ body {
     #04050b;
   background-size: 26px 26px, 26px 26px, auto, auto;
 }
-.prose-editor p {
-  border: 1px solid rgba(70, 216, 255, 0.3);
-  box-shadow: inset 0 0 0 1px rgba(255, 74, 216, 0.12);
-  border-radius: 6px;
-  padding: 0.45rem 0.65rem;
+.prose-editor .code-block-wrapper pre {
+  box-shadow: inset 0 0 0 1px rgba(255, 74, 216, 0.18), 0 0 18px rgba(70, 216, 255, 0.16);
 }
 .prose-editor h1, .prose-editor h2, .prose-editor h3 {
   text-shadow: 0 0 10px rgba(70, 216, 255, 0.45);
@@ -327,12 +318,8 @@ body {
     radial-gradient(circle at 92% 0%, rgba(76, 105, 180, 0.18), transparent 40%),
     linear-gradient(180deg, #090c13 0%, #101826 100%);
 }
-.prose-editor p {
-  border: 1px solid rgba(146, 163, 190, 0.2);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(2px);
-  padding: 0.48rem 0.75rem;
+.prose-editor .code-block-wrapper pre {
+  box-shadow: 0 18px 32px rgba(2, 6, 23, 0.3);
 }
 .prose-editor h1, .prose-editor h2, .prose-editor h3 {
   letter-spacing: 0.012em;
@@ -368,17 +355,56 @@ body {
     radial-gradient(circle at 95% 0%, rgba(211, 236, 249, 0.75), transparent 38%),
     #eff8fc;
 }
-.prose-editor p {
-  border-left: 4px solid rgba(46, 143, 184, 0.42);
-  border-radius: 0 12px 12px 0;
-  background: rgba(255, 255, 255, 0.65);
-  padding: 0.48rem 0.8rem;
+.prose-editor blockquote {
+  background: rgba(255, 255, 255, 0.72);
+  border-left-color: rgba(46, 143, 184, 0.42);
 }
 .prose-editor h1, .prose-editor h2, .prose-editor h3 {
   color: #16577a;
   letter-spacing: 0.008em;
 }
 `
+
+const CUSTOM_CSS_VARIABLES = [
+  '--background / --foreground',
+  '--card / --card-foreground',
+  '--border / --muted / --muted-foreground',
+  '--primary / --primary-foreground',
+  '--pmd-link-color',
+  '--pmd-code-bg / --pmd-code-fg / --pmd-code-border',
+  '--pmd-code-keyword / --pmd-code-string / --pmd-code-comment',
+  '--pmd-table-border / --pmd-table-header-bg / --pmd-table-cell-bg',
+  '--pmd-formula-bg / --pmd-formula-fg / --pmd-formula-border',
+] as const
+
+const CUSTOM_CSS_SELECTORS = [
+  'body',
+  '.prose-editor',
+  '.prose-editor h1',
+  '.prose-editor pre',
+  '.prose-editor blockquote',
+  '.prose-editor a',
+] as const
+
+const CUSTOM_CSS_EXAMPLE = `:root {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --primary: #38bdf8;
+  --pmd-link-color: #7dd3fc;
+  --pmd-code-bg: #020617;
+  --pmd-code-fg: #e2e8f0;
+  --pmd-code-border: rgba(56, 189, 248, 0.28);
+  --pmd-code-keyword: #c084fc;
+  --pmd-code-string: #5eead4;
+}
+
+.prose-editor h1 {
+  letter-spacing: 0.01em;
+}
+
+.prose-editor blockquote {
+  border-left-color: rgba(56, 189, 248, 0.5);
+}`.trim()
 
 export function Header() {
   const { currentDocument, updateCurrentTitle, saveDocument } = useEditorStore()
@@ -392,9 +418,8 @@ export function Header() {
   )
   const [isThemeDialogOpen, setIsThemeDialogOpen] = useState(false)
   const [themeDialogTab, setThemeDialogTab] = useState<'theme' | 'typography'>('theme')
-  // Initialize with defaults; localStorage is loaded in useEffect after mount to avoid SSR issues
-  const [typographyParams, setTypographyParams] = useState<TypographyParams>(DEFAULT_TYPOGRAPHY)
-  const [typographyDraft, setTypographyDraft] = useState<TypographyParams>(DEFAULT_TYPOGRAPHY)
+  const [typographyParams, setTypographyParams] = useState<TypographyParams>(() => loadTypographyParams())
+  const [typographyDraft, setTypographyDraft] = useState<TypographyParams>(() => loadTypographyParams())
 
   const applyTypographyParams = useCallback((p: TypographyParams) => {
     if (typeof document === 'undefined') return
@@ -452,15 +477,6 @@ export function Header() {
   useEffect(() => {
     applyCustomThemeCss(customCssDraft)
   }, [applyCustomThemeCss, customCssDraft])
-
-  // Load typography params from localStorage after mount (client-only)
-  useEffect(() => {
-    const saved = loadTypographyParams()
-    setTypographyParams(saved)
-    setTypographyDraft(saved)
-    applyTypographyParams(saved)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // intentionally run only on mount
 
   useEffect(() => {
     applyTypographyParams(typographyParams)
@@ -844,11 +860,49 @@ export function Header() {
                   <div className="text-xs text-muted-foreground">Use built-in app theme only</div>
                 </button>
               </div>
+              <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                <div>
+                  <div className="text-sm font-medium">自定义 CSS 指南</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    推荐优先修改 CSS 变量，改动范围更稳定；需要精细控制时，再写选择器样式。
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium">常用变量</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CUSTOM_CSS_VARIABLES.map((item) => (
+                      <code key={item} className="rounded bg-background px-1.5 py-0.5 text-[11px]">
+                        {item}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium">常用选择器</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CUSTOM_CSS_SELECTORS.map((item) => (
+                      <code key={item} className="rounded bg-background px-1.5 py-0.5 text-[11px]">
+                        {item}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-md bg-background p-3">
+                  <div className="mb-2 text-xs font-medium">示例</div>
+                  <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-5">
+                    {CUSTOM_CSS_EXAMPLE}
+                  </pre>
+                </div>
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-900 dark:text-amber-100">
+                  不建议直接给 <code>.prose-editor p</code> 设置边框、背景或大内边距。编辑器里的换行/段落本身就是独立块，
+                  这样很容易出现“每行一个段落框”的混乱效果。
+                </div>
+              </div>
               <Textarea
                 value={customCssDraft}
                 onChange={(e) => setCustomCssDraft(e.target.value)}
                 className="h-52 font-mono text-xs"
-                placeholder=":root { --pmd-code-bg: #0f172a; }"
+                placeholder=":root { --pmd-code-bg: #020617; --pmd-code-keyword: #c084fc; }"
               />
               <DialogFooter>
                 <Button variant="outline" onClick={handleResetCustomTheme}>重置</Button>

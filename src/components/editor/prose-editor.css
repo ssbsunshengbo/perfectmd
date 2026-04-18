@@ -15,12 +15,29 @@
   --pmd-code-bg: var(--muted);
   --pmd-code-fg: var(--foreground);
   --pmd-code-border: var(--border);
+  --pmd-code-comment: #64748b;
+  --pmd-code-keyword: #7c3aed;
+  --pmd-code-string: #0f766e;
+  --pmd-code-number: #b45309;
+  --pmd-code-title: #1d4ed8;
+  --pmd-code-variable: #be123c;
+  --pmd-code-attr: #0f766e;
   --pmd-table-border: var(--border);
   --pmd-table-header-bg: var(--muted);
   --pmd-table-cell-bg: transparent;
   --pmd-formula-bg: transparent;
   --pmd-formula-fg: var(--foreground);
   --pmd-formula-border: var(--border);
+}
+
+.dark .prose-editor {
+  --pmd-code-comment: #8b9bb4;
+  --pmd-code-keyword: #c084fc;
+  --pmd-code-string: #5eead4;
+  --pmd-code-number: #fbbf24;
+  --pmd-code-title: #93c5fd;
+  --pmd-code-variable: #fda4af;
+  --pmd-code-attr: #67e8f9;
 }
 
 .prose-editor p {
@@ -84,7 +101,7 @@
   padding: 1em;
   border-radius: 6px;
   overflow-x: auto;
-  white-space: pre-wrap;
+  white-space: pre;
   line-height: 1.45;
   min-height: 3.2em;
 }
@@ -193,7 +210,66 @@
   min-width: 100%;
   min-height: 1.45em;
   line-height: 1.45;
-  white-space: pre-wrap;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.prose-editor pre code.hljs,
+.prose-editor pre code[data-highlighted='true'] {
+  background: transparent !important;
+  color: var(--pmd-code-fg);
+}
+
+.prose-editor pre code .hljs-comment,
+.prose-editor pre code .hljs-quote {
+  color: var(--pmd-code-comment) !important;
+  font-style: italic;
+}
+
+.prose-editor pre code .hljs-keyword,
+.prose-editor pre code .hljs-selector-tag,
+.prose-editor pre code .hljs-literal,
+.prose-editor pre code .hljs-section,
+.prose-editor pre code .hljs-link {
+  color: var(--pmd-code-keyword) !important;
+}
+
+.prose-editor pre code .hljs-string,
+.prose-editor pre code .hljs-doctag,
+.prose-editor pre code .hljs-regexp,
+.prose-editor pre code .hljs-addition,
+.prose-editor pre code .hljs-meta .hljs-string {
+  color: var(--pmd-code-string) !important;
+}
+
+.prose-editor pre code .hljs-number,
+.prose-editor pre code .hljs-symbol,
+.prose-editor pre code .hljs-bullet,
+.prose-editor pre code .hljs-meta,
+.prose-editor pre code .hljs-built_in,
+.prose-editor pre code .hljs-type {
+  color: var(--pmd-code-number) !important;
+}
+
+.prose-editor pre code .hljs-title,
+.prose-editor pre code .hljs-title.class_,
+.prose-editor pre code .hljs-title.function_ {
+  color: var(--pmd-code-title) !important;
+}
+
+.prose-editor pre code .hljs-variable,
+.prose-editor pre code .hljs-template-variable,
+.prose-editor pre code .hljs-params,
+.prose-editor pre code .hljs-deletion {
+  color: var(--pmd-code-variable) !important;
+}
+
+.prose-editor pre code .hljs-attr,
+.prose-editor pre code .hljs-attribute,
+.prose-editor pre code .hljs-property,
+.prose-editor pre code .hljs-name,
+.prose-editor pre code .hljs-tag {
+  color: var(--pmd-code-attr) !important;
 }
 
 .prose-editor pre code[data-highlighted='true'] .hljs {
@@ -201,12 +277,17 @@
 }
 
 /* Prevent paragraph-box border/background leaking into headings */
-.prose-editor p:has(> h1, > h2, > h3, > h4, > h5, > h6) {
+.prose-editor p:has(> h1, > h2, > h3, > h4, > h5, > h6),
+.prose-editor p:has(> ul, > ol, > pre, > table, > blockquote, > hr, > .code-block-wrapper, > img),
+.prose-editor p:has(> br:only-child) {
   border: none !important;
   background: none !important;
   box-shadow: none !important;
   padding-left: 0 !important;
   padding-right: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  backdrop-filter: none !important;
 }
 
 .prose-editor blockquote {

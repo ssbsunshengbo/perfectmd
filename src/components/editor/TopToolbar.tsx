@@ -44,26 +44,26 @@ interface TopToolbarProps {
 }
 
 const TEXT_COLORS = [
-  { name: 'None', value: 'inherit' },
-  { name: 'Red', value: '#ef4444' },
-  { name: 'Orange', value: '#f97316' },
-  { name: 'Yellow', value: '#eab308' },
-  { name: 'Green', value: '#22c55e' },
-  { name: 'Teal', value: '#14b8a6' },
-  { name: 'Blue', value: '#3b82f6' },
-  { name: 'Purple', value: '#a855f7' },
-  { name: 'Pink', value: '#ec4899' },
-  { name: 'Gray', value: '#6b7280' },
+  { name: '恢复默认文字颜色', value: 'inherit' },
+  { name: '红色', value: '#ef4444' },
+  { name: '橙色', value: '#f97316' },
+  { name: '黄色', value: '#eab308' },
+  { name: '绿色', value: '#22c55e' },
+  { name: '青色', value: '#14b8a6' },
+  { name: '蓝色', value: '#3b82f6' },
+  { name: '紫色', value: '#a855f7' },
+  { name: '粉色', value: '#ec4899' },
+  { name: '灰色', value: '#6b7280' },
 ]
 
 const HIGHLIGHT_COLORS = [
-  { name: 'None', value: 'transparent' },
-  { name: 'Yellow', value: '#fef08a' },
-  { name: 'Green', value: '#bbf7d0' },
-  { name: 'Blue', value: '#bfdbfe' },
-  { name: 'Pink', value: '#fbcfe8' },
-  { name: 'Orange', value: '#fed7aa' },
-  { name: 'Purple', value: '#e9d5ff' },
+  { name: '清除高亮', value: 'transparent' },
+  { name: '黄色高亮', value: '#fef08a' },
+  { name: '绿色高亮', value: '#bbf7d0' },
+  { name: '蓝色高亮', value: '#bfdbfe' },
+  { name: '粉色高亮', value: '#fbcfe8' },
+  { name: '橙色高亮', value: '#fed7aa' },
+  { name: '紫色高亮', value: '#e9d5ff' },
 ]
 
 const FONT_SIZES = [
@@ -93,10 +93,10 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
   const [highlightRgbInput, setHighlightRgbInput] = useState('254, 240, 138')
 
   const toolbarButtons = [
-    { icon: Bold, title: shortcutTitle('加粗', 'Cmd/Ctrl+B'), style: 'bold', active: formatState.bold },
-    { icon: Italic, title: shortcutTitle('斜体', 'Cmd/Ctrl+I'), style: 'italic', active: formatState.italic },
-    { icon: Underline, title: shortcutTitle('下划线', 'Cmd/Ctrl+U'), style: 'underline', active: formatState.underline },
-    { icon: Strikethrough, title: shortcutTitle('删除线', 'Cmd/Ctrl+Shift+X'), style: 'strikethrough', active: formatState.strikethrough },
+    { icon: Bold, title: shortcutTitle('加粗', '⌘B / Ctrl+B'), style: 'bold', active: formatState.bold },
+    { icon: Italic, title: shortcutTitle('斜体', '⌘I / Ctrl+I'), style: 'italic', active: formatState.italic },
+    { icon: Underline, title: shortcutTitle('下划线', '⌘U / Ctrl+U'), style: 'underline', active: formatState.underline },
+    { icon: Strikethrough, title: shortcutTitle('删除线', '⌥⇧5 / Alt+Shift+5'), style: 'strikethrough', active: formatState.strikethrough },
     { icon: Code, title: '行内代码', style: 'code', active: false },
   ]
 
@@ -195,7 +195,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
 
       <Popover open={showHighlightPicker} onOpenChange={setShowHighlightPicker}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="高亮" onMouseDown={preventToolbarMouseDown}>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="背景高亮" onMouseDown={preventToolbarMouseDown}>
             <Highlighter className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
@@ -356,7 +356,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
         className={`h-8 w-8 p-0 ${formatState.bulletList ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : ''}`}
         onMouseDown={preventToolbarMouseDown}
         onClick={() => onApplyStyle('list', 'bullet')}
-        title={shortcutTitle('无序列表', 'Cmd/Ctrl+Shift+8')}
+        title={shortcutTitle('无序列表', '⌘⇧8 / Ctrl+Shift+8')}
       >
         <List className="h-4 w-4" />
       </Button>
@@ -366,14 +366,14 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
         className={`h-8 w-8 p-0 ${formatState.orderedList ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : ''}`}
         onMouseDown={preventToolbarMouseDown}
         onClick={() => onApplyStyle('list', 'ordered')}
-        title={shortcutTitle('有序列表', 'Cmd/Ctrl+Shift+7')}
+        title={shortcutTitle('有序列表', '⌘⇧7 / Ctrl+Shift+7')}
       >
         <ListOrdered className="h-4 w-4" />
       </Button>
       <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('quote')} title="引用">
         <Quote className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('link')} title={shortcutTitle('链接', 'Cmd/Ctrl+K')}>
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('link')} title={shortcutTitle('链接', '⌘K / Ctrl+K')}>
         <Link2 className="h-4 w-4" />
       </Button>
       <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('hr')} title="分割线">
