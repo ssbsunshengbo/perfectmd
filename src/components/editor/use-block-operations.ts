@@ -377,8 +377,37 @@ export function useBlockOperations(
       return true
     }
 
+    const hasMeaningfulListContent = (node: ParentNode): boolean => {
+      const text = (node.textContent || '').replace(/\u200b/g, '').trim()
+      return text.length > 0 || !!node.querySelector('img, table, hr, pre, ul, ol, blockquote')
+    }
+
+    let range = selection.getRangeAt(0)
+    if (!range.collapsed) {
+      range.deleteContents()
+      range = selection.getRangeAt(0)
+    }
+
+    const splitMarker = document.createComment('list-enter-split-marker')
+    range.insertNode(splitMarker)
+
+    const trailingRange = document.createRange()
+    trailingRange.setStartAfter(splitMarker)
+    trailingRange.setEnd(li, li.childNodes.length)
+    const trailingFragment = trailingRange.extractContents()
+    splitMarker.parentNode?.removeChild(splitMarker)
+
     const newLi = document.createElement('li')
-    newLi.appendChild(document.createElement('br'))
+    if (hasMeaningfulListContent(trailingFragment)) {
+      newLi.appendChild(trailingFragment)
+    } else {
+      newLi.appendChild(document.createElement('br'))
+    }
+
+    if (!hasMeaningfulListContent(li) && !li.querySelector('br')) {
+      li.appendChild(document.createElement('br'))
+    }
+
     li.parentNode?.insertBefore(newLi, li.nextSibling)
     const caret = document.createRange()
     caret.selectNodeContents(newLi)

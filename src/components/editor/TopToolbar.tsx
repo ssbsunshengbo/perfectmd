@@ -79,6 +79,10 @@ const FONT_SIZES = [
   { name: '48px', value: '48px' },
 ]
 
+const shortcutTitle = (label: string, shortcut?: string) => (
+  shortcut ? `${label}（${shortcut}）` : label
+)
+
 export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [showHighlightPicker, setShowHighlightPicker] = useState(false)
@@ -89,11 +93,11 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
   const [highlightRgbInput, setHighlightRgbInput] = useState('254, 240, 138')
 
   const toolbarButtons = [
-    { icon: Bold, title: 'Bold (Ctrl+B)', style: 'bold', active: formatState.bold },
-    { icon: Italic, title: 'Italic (Ctrl+I)', style: 'italic', active: formatState.italic },
-    { icon: Underline, title: 'Underline (Ctrl+U)', style: 'underline', active: formatState.underline },
-    { icon: Strikethrough, title: 'Strikethrough', style: 'strikethrough', active: formatState.strikethrough },
-    { icon: Code, title: 'Inline Code', style: 'code', active: false },
+    { icon: Bold, title: shortcutTitle('加粗', 'Cmd/Ctrl+B'), style: 'bold', active: formatState.bold },
+    { icon: Italic, title: shortcutTitle('斜体', 'Cmd/Ctrl+I'), style: 'italic', active: formatState.italic },
+    { icon: Underline, title: shortcutTitle('下划线', 'Cmd/Ctrl+U'), style: 'underline', active: formatState.underline },
+    { icon: Strikethrough, title: shortcutTitle('删除线', 'Cmd/Ctrl+Shift+X'), style: 'strikethrough', active: formatState.strikethrough },
+    { icon: Code, title: '行内代码', style: 'code', active: false },
   ]
 
   const preventToolbarMouseDown = (e: React.MouseEvent) => {
@@ -128,7 +132,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
 
       <Popover open={showColorPicker} onOpenChange={setShowColorPicker}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Text Color" onMouseDown={preventToolbarMouseDown}>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="文字颜色" onMouseDown={preventToolbarMouseDown}>
             <Palette className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
@@ -191,7 +195,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
 
       <Popover open={showHighlightPicker} onOpenChange={setShowHighlightPicker}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Highlight" onMouseDown={preventToolbarMouseDown}>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="高亮" onMouseDown={preventToolbarMouseDown}>
             <Highlighter className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
@@ -259,14 +263,14 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
           className="h-8 w-8 p-0"
           onMouseDown={preventToolbarMouseDown}
           onClick={() => onApplyStyle('fontSizeDecrease')}
-          title="Decrease Font Size"
+          title="减小字号"
         >
           <MinusIcon className="h-4 w-4" />
         </Button>
 
         <Popover open={showFontSizePicker} onOpenChange={setShowFontSizePicker}>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Font Size" onMouseDown={preventToolbarMouseDown}>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="字号" onMouseDown={preventToolbarMouseDown}>
               <Type className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
@@ -295,7 +299,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
           className="h-8 w-8 p-0"
           onMouseDown={preventToolbarMouseDown}
           onClick={() => onApplyStyle('fontSizeIncrease')}
-          title="Increase Font Size"
+          title="增大字号"
         >
           <Plus className="h-4 w-4" />
         </Button>
@@ -309,7 +313,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
         className="h-8 w-8 p-0"
         onMouseDown={preventToolbarMouseDown}
         onClick={() => onApplyStyle('normal')}
-        title="Normal Paragraph"
+        title="正文段落"
       >
         <Pilcrow className="h-4 w-4" />
       </Button>
@@ -319,7 +323,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
         className={`h-8 w-8 p-0 text-xs font-bold ${formatState.heading === 'h1' ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : ''}`}
         onMouseDown={preventToolbarMouseDown}
         onClick={() => onApplyStyle('heading', '1')}
-        title="Heading 1"
+        title="一级标题"
       >
         H1
       </Button>
@@ -329,7 +333,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
         className={`h-8 w-8 p-0 text-xs font-bold ${formatState.heading === 'h2' ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : ''}`}
         onMouseDown={preventToolbarMouseDown}
         onClick={() => onApplyStyle('heading', '2')}
-        title="Heading 2"
+        title="二级标题"
       >
         H2
       </Button>
@@ -339,7 +343,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
         className={`h-8 w-8 p-0 text-xs font-bold ${formatState.heading === 'h3' ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : ''}`}
         onMouseDown={preventToolbarMouseDown}
         onClick={() => onApplyStyle('heading', '3')}
-        title="Heading 3"
+        title="三级标题"
       >
         H3
       </Button>
@@ -352,7 +356,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
         className={`h-8 w-8 p-0 ${formatState.bulletList ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : ''}`}
         onMouseDown={preventToolbarMouseDown}
         onClick={() => onApplyStyle('list', 'bullet')}
-        title="Bullet List"
+        title={shortcutTitle('无序列表', 'Cmd/Ctrl+Shift+8')}
       >
         <List className="h-4 w-4" />
       </Button>
@@ -362,41 +366,41 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
         className={`h-8 w-8 p-0 ${formatState.orderedList ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : ''}`}
         onMouseDown={preventToolbarMouseDown}
         onClick={() => onApplyStyle('list', 'ordered')}
-        title="Ordered List"
+        title={shortcutTitle('有序列表', 'Cmd/Ctrl+Shift+7')}
       >
         <ListOrdered className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('quote')} title="Quote">
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('quote')} title="引用">
         <Quote className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('link')} title="Link">
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('link')} title={shortcutTitle('链接', 'Cmd/Ctrl+K')}>
         <Link2 className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('hr')} title="Horizontal Rule">
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('hr')} title="分割线">
         <Minus className="h-4 w-4" />
       </Button>
 
       <div className="mx-1 h-5 w-px bg-border" />
 
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('table')} title="Insert Table">
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('table')} title="插入表格">
         <Table className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('codeBlock')} title="Insert Code Block">
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('codeBlock')} title="插入代码块">
         <Braces className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('formula')} title="Insert Formula">
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('formula')} title="插入公式">
         <Sigma className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[10px]" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('tableAddRow')} title="Add Table Row">
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[10px]" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('tableAddRow')} title="表格加一行">
         <Rows3 className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[10px]" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('tableRemoveRow')} title="Remove Table Row">
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[10px]" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('tableRemoveRow')} title="表格删一行">
         R-
       </Button>
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[10px]" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('tableAddColumn')} title="Add Table Column">
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[10px]" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('tableAddColumn')} title="表格加一列">
         <Columns3 className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[10px]" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('tableRemoveColumn')} title="Remove Table Column">
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[10px]" onMouseDown={preventToolbarMouseDown} onClick={() => onApplyStyle('tableRemoveColumn')} title="表格删一列">
         C-
       </Button>
     </div>

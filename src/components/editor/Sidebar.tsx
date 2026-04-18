@@ -17,7 +17,7 @@ import {
   Database,
   ListTree,
 } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -139,8 +139,41 @@ export function Sidebar({ onExport }: SidebarProps) {
   const [isCreating, setIsCreating] = useState(false)
   const [viewMode, setViewMode] = useState<'documents' | 'outline'>('documents')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
+  const [selectionStats, setSelectionStats] = useState({
+    hasSelection: false,
+    charCount: 0,
+    wordCount: 0,
+  })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mdFileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const handleSelectionStats = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        hasSelection?: boolean
+        charCount?: number
+        wordCount?: number
+      }>
+      setSelectionStats({
+        hasSelection: !!customEvent.detail?.hasSelection,
+        charCount: customEvent.detail?.charCount || 0,
+        wordCount: customEvent.detail?.wordCount || 0,
+      })
+    }
+
+    window.addEventListener('editor-selection-stats', handleSelectionStats)
+    return () => {
+      window.removeEventListener('editor-selection-stats', handleSelectionStats)
+    }
+  }, [])
+
+  useEffect(() => {
+    setSelectionStats({
+      hasSelection: false,
+      charCount: 0,
+      wordCount: 0,
+    })
+  }, [currentDocument?.id])
 
   const filteredDocuments = documents.filter((doc) => {
     if (!searchQuery) return true
@@ -541,7 +574,10 @@ export function Sidebar({ onExport }: SidebarProps) {
           const text = (currentDocument.content || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
           const charCount = text.length
           const wordCount = text ? text.split(/\s+/).length : 0
-          return <div>{charCount} 字符 · {wordCount} 词</div>
+          if (selectionStats.hasSelection) {
+            return <div>已选 {selectionStats.charCount} 字符 · {selectionStats.wordCount} 词</div>
+          }
+          return <div>全文 {charCount} 字符 · {wordCount} 词</div>
         })()}
       </div>
 
