@@ -16,6 +16,19 @@ function escapeHtml(code: string) {
     .replace(/>/g, '&gt;')
 }
 
+function resolveCssColor(color: string): string {
+  if (typeof document === 'undefined' || !document.body) return color
+  const probe = document.createElement('span')
+  probe.style.color = color
+  probe.style.position = 'absolute'
+  probe.style.visibility = 'hidden'
+  probe.style.pointerEvents = 'none'
+  document.body.appendChild(probe)
+  const resolved = getComputedStyle(probe).color || color
+  document.body.removeChild(probe)
+  return resolved
+}
+
 function normalizeLanguage(language: string): BundledLanguage | null {
   const normalized = normalizeCodeLanguage(language)
   if (!normalized || normalized === 'plaintext') return null
@@ -25,7 +38,8 @@ function normalizeLanguage(language: string): BundledLanguage | null {
 }
 
 function parseRgbChannels(color: string): [number, number, number] | null {
-  const matched = color.match(/[\d.]+/g)
+  const normalized = resolveCssColor(color)
+  const matched = normalized.match(/[\d.]+/g)
   if (!matched || matched.length < 3) return null
   const channels = matched.slice(0, 3).map((value) => Math.max(0, Math.min(255, Number(value))))
   if (channels.some(Number.isNaN)) return null

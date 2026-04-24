@@ -14,6 +14,7 @@
   --pmd-link-color: #3b82f6;
   --pmd-code-bg: var(--muted);
   --pmd-code-fg: var(--foreground);
+  --pmd-code-plain: var(--foreground);
   --pmd-code-border: var(--border);
   --pmd-code-comment: #64748b;
   --pmd-code-keyword: #7c3aed;
@@ -31,6 +32,7 @@
 }
 
 .dark .prose-editor {
+  --pmd-code-plain: #f8fafc;
   --pmd-code-comment: #8b9bb4;
   --pmd-code-keyword: #c084fc;
   --pmd-code-string: #5eead4;
@@ -256,7 +258,16 @@
 .prose-editor pre code.hljs,
 .prose-editor pre code[data-highlighted='true'] {
   background: transparent !important;
-  color: var(--pmd-code-fg);
+  color: var(--pmd-code-plain) !important;
+}
+
+.prose-editor pre code[data-highlighted='true'] > span,
+.prose-editor pre code[data-highlighted='true'] .line {
+  color: var(--pmd-code-plain);
+}
+
+.prose-editor pre code[data-highlighted='true'] span:not([style*='color']) {
+  color: var(--pmd-code-plain) !important;
 }
 
 .prose-editor pre code .hljs-comment,

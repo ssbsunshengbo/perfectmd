@@ -769,7 +769,7 @@ export function Header() {
         setIsThemeDialogOpen(open)
         if (!open) setThemeDialogTab('theme')
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto overscroll-contain">
           <DialogHeader>
             <DialogTitle>外观与排版</DialogTitle>
             <DialogDescription>
