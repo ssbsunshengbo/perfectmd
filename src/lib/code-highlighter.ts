@@ -65,15 +65,53 @@ function resolveTheme(backgroundColor: string): BundledTheme {
   return isDarkBackground(backgroundColor) ? 'github-dark-default' : 'github-light-default'
 }
 
-function extractCodeInnerHtml(highlightedHtml: string): string {
+function normalizeColorToken(color: string): string {
+  return color.replace(/\s+/g, '').toLowerCase()
+}
+
+function replaceDefaultTokenColor(codeEl: HTMLElement, defaultColor: string) {
+  const normalizedDefaultColor = normalizeColorToken(defaultColor)
+  if (!normalizedDefaultColor) return
+
+  codeEl.querySelectorAll('span[style]').forEach((node) => {
+    const span = node as HTMLSpanElement
+    const inlineColor = span.style.color
+    if (!inlineColor) return
+    if (normalizeColorToken(inlineColor) !== normalizedDefaultColor) return
+    span.style.color = 'var(--pmd-code-plain)'
+  })
+}
+
+function replaceDefaultTokenColorInHtml(html: string, defaultColor: string): string {
+  if (!defaultColor) return html
+  const escapedColor = defaultColor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return html.replace(new RegExp(`color:\\s*${escapedColor}`, 'gi'), 'color:var(--pmd-code-plain)')
+}
+
+function extractCodeInnerHtml(highlightedHtml: string): { html: string; defaultColor: string } {
   if (typeof document === 'undefined') {
+    const defaultColorMatch = highlightedHtml.match(/<pre[^>]*style="[^"]*color:([^;"]+)/i)
     const matched = highlightedHtml.match(/<code[^>]*>([\s\S]*)<\/code>/i)
-    return matched?.[1] || ''
+    const defaultColor = defaultColorMatch?.[1]?.trim() || ''
+    const html = matched?.[1] || ''
+    return {
+      html: replaceDefaultTokenColorInHtml(html, defaultColor),
+      defaultColor,
+    }
   }
 
   const template = document.createElement('template')
   template.innerHTML = highlightedHtml.trim()
-  return template.content.querySelector('code')?.innerHTML || ''
+  const preEl = template.content.querySelector('pre') as HTMLPreElement | null
+  const codeEl = template.content.querySelector('code') as HTMLElement | null
+  const defaultColor = preEl?.style.color || ''
+  if (codeEl && defaultColor) {
+    replaceDefaultTokenColor(codeEl, defaultColor)
+  }
+  return {
+    html: codeEl?.innerHTML || '',
+    defaultColor,
+  }
 }
 
 async function getHighlighter() {
@@ -130,10 +168,11 @@ export async function highlightCodeToInlineHtml(code: string, language: string, 
   }
 
   const highlighter = await getHighlighter()
-  const html = extractCodeInnerHtml(highlighter.codeToHtml(code, {
+  const extracted = extractCodeInnerHtml(highlighter.codeToHtml(code, {
     lang: normalizedLanguage,
     theme,
   }))
+  const html = extracted.html
 
   rememberHighlight(cacheKey, html)
 
