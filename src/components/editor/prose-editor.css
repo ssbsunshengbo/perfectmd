@@ -98,12 +98,16 @@
   background-color: var(--pmd-code-bg);
   color: var(--pmd-code-fg);
   border: 1px solid var(--pmd-code-border);
-  padding: 1em;
+  padding: 1.15em 1em 1em;
   border-radius: 6px;
-  overflow-x: auto;
-  white-space: pre;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
   line-height: 1.45;
   min-height: 3.2em;
+  font-family: var(--pmd-code-font-family, 'SFMono-Regular', 'Cascadia Code', 'Fira Code', Consolas, 'Liberation Mono', Menlo, monospace);
+  font-size: 0.92em;
+  tab-size: 2;
 }
 
 .prose-editor .code-block-wrapper {
@@ -114,6 +118,18 @@
 .prose-editor .code-block-wrapper pre {
   margin: 0;
   border-radius: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.prose-editor .code-block-wrapper:focus-within pre {
+  border-color: color-mix(in oklch, var(--pmd-code-border) 35%, var(--foreground));
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--pmd-code-border) 58%, transparent);
+}
+
+.prose-editor .code-block-wrapper[data-code-wrap='off'] pre {
+  overflow-x: auto;
+  overflow-wrap: normal;
+  white-space: pre;
 }
 
 .prose-editor .code-controls {
@@ -132,7 +148,8 @@
   pointer-events: auto;
 }
 
-.prose-editor .code-copy-btn {
+.prose-editor .code-copy-btn,
+.prose-editor .code-wrap-toggle {
   position: static;
   height: 1.52rem;
   min-width: 1.52rem;
@@ -152,10 +169,16 @@
   opacity: 0.95;
 }
 
+.prose-editor .code-wrap-toggle.is-active {
+  color: var(--foreground);
+  border-color: color-mix(in oklch, var(--pmd-code-border) 35%, var(--foreground));
+  background: color-mix(in oklch, var(--pmd-code-bg) 72%, var(--background));
+}
+
 .prose-editor .code-lang-select {
   position: static;
   height: 1.55rem;
-  max-width: 8.6rem;
+  max-width: 9.8rem;
   border: 1px solid var(--pmd-code-border);
   border-radius: 999px;
   background: color-mix(in oklch, var(--background) 95%, transparent);
@@ -165,9 +188,11 @@
   padding: 0 0.6rem;
   outline: none;
   cursor: pointer;
+  font-family: inherit;
 }
 
-.prose-editor .code-copy-btn:hover {
+.prose-editor .code-copy-btn:hover,
+.prose-editor .code-wrap-toggle:hover {
   color: var(--foreground);
   border-color: var(--foreground);
 }
@@ -210,8 +235,22 @@
   min-width: 100%;
   min-height: 1.45em;
   line-height: 1.45;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: none;
   tab-size: 2;
+}
+
+.prose-editor .code-block-wrapper[data-code-wrap='off'] pre code {
+  display: inline-block;
+  min-width: 100%;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
+.prose-editor pre code *,
+.prose-editor pre code span {
+  font-family: inherit;
 }
 
 .prose-editor pre code.hljs,

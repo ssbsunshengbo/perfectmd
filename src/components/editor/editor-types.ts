@@ -1,3 +1,5 @@
+export { CODE_LANGUAGE_OPTIONS, CODE_LANGUAGES } from '@/lib/code-languages'
+
 export interface MarkdownEditorProps {
   content: string
   onChange: (content: string) => void
@@ -27,21 +29,6 @@ export const FONT_SIZE_STEP = 4
 export const MIN_FONT_SIZE = 10
 export const MAX_FONT_SIZE = 72
 export const DEFAULT_FONT_SIZE = 16
-
-export const CODE_LANGUAGES = [
-  'plaintext',
-  'javascript',
-  'typescript',
-  'python',
-  'java',
-  'go',
-  'rust',
-  'json',
-  'bash',
-  'html',
-  'css',
-  'sql',
-]
 
 export interface EditingLink {
   element: HTMLAnchorElement | null

@@ -81,7 +81,7 @@ function setupExportDom(content: string): HTMLElement {
   const root = document.createElement('div')
   root.innerHTML = content
   root
-    .querySelectorAll('.code-controls, .code-copy-btn, .code-copy-toast, [data-code-lang-select]')
+    .querySelectorAll('.code-controls, .code-copy-btn, .code-wrap-toggle, .code-copy-toast, [data-code-lang-select], [data-code-wrap-toggle]')
     .forEach((el) => el.remove())
   root.querySelectorAll('[contenteditable]').forEach((el) => el.removeAttribute('contenteditable'))
   return root

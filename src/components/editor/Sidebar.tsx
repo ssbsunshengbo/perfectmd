@@ -34,6 +34,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { normalizeCodeLanguage } from '@/lib/code-languages'
 
 function markdownTextToBasicHtml(md: string): string {
   const lines = md.split('\n')
@@ -66,8 +67,9 @@ function markdownTextToBasicHtml(md: string): string {
     if (inCodeBlock) {
       if (line.startsWith('```')) {
         const codeContent = escapeHtml(codeLines.join('\n'))
+        const normalizedLang = normalizeCodeLanguage(codeLang)
         htmlParts.push(
-          `<div class="code-block-wrapper" data-code-language="${codeLang || 'plaintext'}"><pre class="editor-code-block"><code data-language="${codeLang || 'plaintext'}">${codeContent}</code></pre></div>`
+          `<div class="code-block-wrapper" data-code-language="${normalizedLang}" data-code-wrap="on"><pre class="editor-code-block"><code data-language="${normalizedLang}">${codeContent}</code></pre></div>`
         )
         inCodeBlock = false
         codeLines = []
@@ -81,7 +83,7 @@ function markdownTextToBasicHtml(md: string): string {
     if (line.startsWith('```')) {
       closeList()
       inCodeBlock = true
-      codeLang = line.slice(3).trim()
+      codeLang = normalizeCodeLanguage(line.slice(3).trim())
       continue
     }
 

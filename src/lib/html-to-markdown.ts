@@ -5,6 +5,8 @@
  * - Preserves code block language and line breaks.
  */
 
+import { normalizeCodeLanguage } from './code-languages'
+
 interface StyleInfo {
   color?: string
   backgroundColor?: string
@@ -30,7 +32,7 @@ function parseStyle(styleStr: string): StyleInfo {
 }
 
 function normalizeCodeText(text: string): string {
-  return text.replace(/\r\n?/g, '\n').replace(/\n$/, '')
+  return text.replace(/\u200B/g, '').replace(/\r\n?/g, '\n').replace(/\n$/, '')
 }
 
 function normalizeInlineLatex(raw: string): string {
@@ -60,10 +62,12 @@ function detectCodeLanguage(source: Element): string {
     source.getAttribute('data-language') ||
     source.querySelector('code')?.getAttribute('data-language') ||
     ''
-  if (dataLang && dataLang !== 'plaintext') return dataLang.toLowerCase()
+  const normalizedDataLang = normalizeCodeLanguage(dataLang)
+  if (normalizedDataLang !== 'plaintext') return normalizedDataLang
   const className = source.className || source.querySelector('code')?.className || ''
   const match = className.match(/language-([a-z0-9_+-]+)/i)
-  return (match?.[1] || '').toLowerCase()
+  const normalizedClassLang = normalizeCodeLanguage(match?.[1] || '')
+  return normalizedClassLang === 'plaintext' ? '' : normalizedClassLang
 }
 
 function applyInlineStyles(text: string, style: StyleInfo): string {
@@ -229,7 +233,7 @@ export function htmlToMarkdown(html: string, title: string): string {
 
   // Remove editor-only controls before conversion.
   doc.body
-    .querySelectorAll('.code-controls, .code-copy-btn, .code-copy-toast, [data-copy-code-btn], [data-code-lang-select]')
+    .querySelectorAll('.code-controls, .code-copy-btn, .code-wrap-toggle, .code-copy-toast, [data-copy-code-btn], [data-code-lang-select], [data-code-wrap-toggle]')
     .forEach((node) => node.remove())
 
   let markdown = `# ${title}\n\n`

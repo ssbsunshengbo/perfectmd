@@ -188,7 +188,7 @@ export function useImageHandling(
       }
       reader.readAsDataURL(file)
     })
-  }, [editorRef, handleInput])
+  }, [editorRef, handleInput, imageUrlMapRef])
 
   return {
     selectedImage,

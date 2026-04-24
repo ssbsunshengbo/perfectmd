@@ -39,7 +39,11 @@ interface FormatState {
 }
 
 interface TopToolbarProps {
-  onApplyStyle: (style: string, value?: string) => void
+  onApplyStyle: (
+    style: string,
+    value?: string,
+    options?: { preserveSelection?: boolean },
+  ) => void
   formatState: FormatState
 }
 
@@ -112,6 +116,30 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
     return `rgb(${r}, ${g}, ${b})`
   }
 
+  const hexToRgbInput = (value: string) => {
+    const hex = value.replace('#', '')
+    if (hex.length !== 6) return value
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
+    if ([r, g, b].some(Number.isNaN)) return value
+    return `${r}, ${g}, ${b}`
+  }
+
+  const applyTextColor = (value: string, closePopover = false) => {
+    onApplyStyle('color', value, { preserveSelection: true })
+    if (closePopover) {
+      setShowColorPicker(false)
+    }
+  }
+
+  const applyHighlightColor = (value: string, closePopover = false) => {
+    onApplyStyle('highlight', value, { preserveSelection: true })
+    if (closePopover) {
+      setShowHighlightPicker(false)
+    }
+  }
+
   return (
     <div className="sticky top-0 z-20 flex flex-wrap items-center gap-0.5 border-b bg-background/95 px-2 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       {toolbarButtons.map((btn) => (
@@ -136,7 +164,12 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
             <Palette className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-56 p-2" align="start">
+        <PopoverContent
+          className="w-56 p-2"
+          align="start"
+          onInteractOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+        >
           <div className="grid grid-cols-5 gap-1">
             {TEXT_COLORS.map((color) => (
               <button
@@ -146,8 +179,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
                 title={color.name}
                 onMouseDown={preventToolbarMouseDown}
                 onClick={() => {
-                  onApplyStyle('color', color.value)
-                  setShowColorPicker(false)
+                  applyTextColor(color.value, true)
                 }}
               >
                 {color.value === 'inherit' && (
@@ -162,10 +194,16 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
                 type="color"
                 value={customTextColor}
                 onMouseDown={preventToolbarMouseDown}
+                onInput={(e) => {
+                  const hex = (e.target as HTMLInputElement).value
+                  setCustomTextColor(hex)
+                  setTextRgbInput(hexToRgbInput(hex))
+                  applyTextColor(hex)
+                }}
                 onChange={(e) => {
                   const hex = e.target.value
                   setCustomTextColor(hex)
-                  onApplyStyle('color', hex)
+                  setTextRgbInput(hexToRgbInput(hex))
                 }}
                 className="h-8 w-12 cursor-pointer p-1"
               />
@@ -183,7 +221,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
                 onClick={() => {
                   const rgb = parseRgbInput(textRgbInput)
                   if (!rgb) return
-                  onApplyStyle('color', rgb)
+                  applyTextColor(rgb, true)
                 }}
               >
                 应用
@@ -199,7 +237,12 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
             <Highlighter className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-56 p-2" align="start">
+        <PopoverContent
+          className="w-56 p-2"
+          align="start"
+          onInteractOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+        >
           <div className="grid grid-cols-7 gap-1">
             {HIGHLIGHT_COLORS.map((color) => (
               <button
@@ -209,8 +252,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
                 title={color.name}
                 onMouseDown={preventToolbarMouseDown}
                 onClick={() => {
-                  onApplyStyle('highlight', color.value)
-                  setShowHighlightPicker(false)
+                  applyHighlightColor(color.value, true)
                 }}
               >
                 {color.value === 'transparent' && (
@@ -225,10 +267,16 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
                 type="color"
                 value={customHighlightColor}
                 onMouseDown={preventToolbarMouseDown}
+                onInput={(e) => {
+                  const hex = (e.target as HTMLInputElement).value
+                  setCustomHighlightColor(hex)
+                  setHighlightRgbInput(hexToRgbInput(hex))
+                  applyHighlightColor(hex)
+                }}
                 onChange={(e) => {
                   const hex = e.target.value
                   setCustomHighlightColor(hex)
-                  onApplyStyle('highlight', hex)
+                  setHighlightRgbInput(hexToRgbInput(hex))
                 }}
                 className="h-8 w-12 cursor-pointer p-1"
               />
@@ -246,7 +294,7 @@ export function TopToolbar({ onApplyStyle, formatState }: TopToolbarProps) {
                 onClick={() => {
                   const rgb = parseRgbInput(highlightRgbInput)
                   if (!rgb) return
-                  onApplyStyle('highlight', rgb)
+                  applyHighlightColor(rgb, true)
                 }}
               >
                 应用
