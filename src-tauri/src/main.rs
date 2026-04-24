@@ -3,13 +3,12 @@
 
 use std::{
     fs,
-    io::ErrorKind,
     path::{Path, PathBuf},
-    process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde::Deserialize;
+use tauri_plugin_shell::ShellExt;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +24,62 @@ struct ExportDocxPayload {
     output_path: String,
     markdown: String,
     assets: Vec<ExportBinaryAssetPayload>,
+}
+
+struct PandocOutput {
+    success: bool,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+fn is_missing_pandoc_error(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("program not allowed")
+        || normalized.contains("no such file or directory")
+        || normalized.contains("the system cannot find the file specified")
+        || normalized.contains("sidecar not allowed")
+}
+
+async fn run_pandoc(app: &tauri::AppHandle, cwd: &Path, args: &[String]) -> Result<PandocOutput, String> {
+    if let Ok(command) = app.shell().sidecar("pandoc") {
+        match command.current_dir(cwd).args(args).output().await {
+            Ok(output) => {
+                return Ok(PandocOutput {
+                    success: output.status.success(),
+                    stdout: output.stdout,
+                    stderr: output.stderr,
+                })
+            }
+            Err(err) => {
+                let message = err.to_string();
+                if !is_missing_pandoc_error(&message) {
+                    return Err(format!("PANDOC_SIDECAR_IO_ERROR: {err}"));
+                }
+            }
+        }
+    }
+
+    match app
+        .shell()
+        .command("pandoc")
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .await
+    {
+        Ok(output) => Ok(PandocOutput {
+            success: output.status.success(),
+            stdout: output.stdout,
+            stderr: output.stderr,
+        }),
+        Err(err) => {
+            let message = err.to_string();
+            if is_missing_pandoc_error(&message) {
+                return Err("PANDOC_NOT_FOUND: bundled pandoc is unavailable and pandoc was not found in the current system PATH".to_string());
+            }
+            Err(format!("PANDOC_IO_ERROR: {err}"))
+        }
+    }
 }
 
 fn unique_export_dir() -> PathBuf {
@@ -99,10 +154,10 @@ fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
-fn export_docx(payload: ExportDocxPayload) -> Result<(), String> {
+async fn export_docx(app: tauri::AppHandle, payload: ExportDocxPayload) -> Result<(), String> {
     let export_dir = unique_export_dir();
 
-    let result = (|| -> Result<(), String> {
+    let result = async {
         fs::create_dir_all(&export_dir)
             .map_err(|err| format!("Failed to create temporary export directory: {err}"))?;
 
@@ -119,32 +174,29 @@ fn export_docx(payload: ExportDocxPayload) -> Result<(), String> {
             let _ = asset.mime_type;
         }
 
-        let command_output = Command::new("pandoc")
-            .current_dir(&export_dir)
-            .arg(markdown_path.as_os_str())
-            .arg("--from=gfm+tex_math_dollars")
-            .arg("--to=docx")
-            .arg("--standalone")
-            .arg("--resource-path")
-            .arg(export_dir.as_os_str())
-            .arg("--output")
-            .arg(Path::new(&payload.output_path).as_os_str())
-            .output();
+        let pandoc_args = vec![
+            markdown_path.to_string_lossy().to_string(),
+            "--from=gfm+tex_math_dollars".to_string(),
+            "--to=docx".to_string(),
+            "--standalone".to_string(),
+            "--resource-path".to_string(),
+            export_dir.to_string_lossy().to_string(),
+            "--output".to_string(),
+            Path::new(&payload.output_path).to_string_lossy().to_string(),
+        ];
 
-        match command_output {
-            Ok(output) if output.status.success() => Ok(()),
-            Ok(output) => {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let details = if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() };
-                Err(format!("PANDOC_FAILED: {}", details))
-            }
-            Err(err) if err.kind() == ErrorKind::NotFound => Err(
-                "PANDOC_NOT_FOUND: pandoc was not found in the current system PATH".to_string(),
-            ),
-            Err(err) => Err(format!("PANDOC_IO_ERROR: {err}")),
+        let command_output = run_pandoc(&app, &export_dir, &pandoc_args).await?;
+
+        if command_output.success {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&command_output.stderr);
+            let stdout = String::from_utf8_lossy(&command_output.stdout);
+            let details = if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() };
+            Err(format!("PANDOC_FAILED: {}", details))
         }
-    })();
+    }
+    .await;
 
     let _ = fs::remove_dir_all(&export_dir);
     result

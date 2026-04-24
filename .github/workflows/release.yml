@@ -10,6 +10,8 @@ permissions:
 
 jobs:
   build:
+    env:
+      PANDOC_VERSION: 3.9.0.2
     strategy:
       fail-fast: false
       matrix:
@@ -17,15 +19,23 @@ jobs:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
             target: 'aarch64-apple-darwin'
+            rustTarget: 'aarch64-apple-darwin'
+            pandocAsset: 'pandoc-3.9.0.2-arm64-macOS.zip'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
             target: 'x86_64-apple-darwin'
+            rustTarget: 'x86_64-apple-darwin'
+            pandocAsset: 'pandoc-3.9.0.2-x86_64-macOS.zip'
           - platform: 'ubuntu-22.04'
             args: ''
             target: ''
+            rustTarget: 'x86_64-unknown-linux-gnu'
+            pandocAsset: 'pandoc-3.9.0.2-linux-amd64.tar.gz'
           - platform: 'windows-latest'
             args: ''
             target: ''
+            rustTarget: 'x86_64-pc-windows-msvc'
+            pandocAsset: 'pandoc-3.9.0.2-windows-x86_64.zip'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -53,6 +63,14 @@ jobs:
 
           const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
           tauri.version = version;
+          tauri.bundle = tauri.bundle || {};
+          const existingExternalBin = Array.isArray(tauri.bundle.externalBin)
+            ? tauri.bundle.externalBin
+            : [];
+          tauri.bundle.externalBin = Array.from(new Set([
+            ...existingExternalBin,
+            'binaries/pandoc'
+          ]));
           fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + '\n');
 
           const cargoBefore = fs.readFileSync(cargoPath, 'utf8');
@@ -93,6 +111,69 @@ jobs:
         run: |
           npm install -g bun
           bun install
+
+      - name: Download bundled Pandoc (Unix)
+        if: matrix.platform != 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src-tauri/binaries
+          TMP_DIR="$(mktemp -d)"
+          ARCHIVE_PATH="$TMP_DIR/${{ matrix.pandocAsset }}"
+          EXTRACT_DIR="$TMP_DIR/extract"
+          curl -L "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/${{ matrix.pandocAsset }}" -o "$ARCHIVE_PATH"
+          mkdir -p "$EXTRACT_DIR"
+          case "${{ matrix.pandocAsset }}" in
+            *.zip)
+              unzip -q "$ARCHIVE_PATH" -d "$EXTRACT_DIR"
+              ;;
+            *.tar.gz)
+              tar -xzf "$ARCHIVE_PATH" -C "$EXTRACT_DIR"
+              ;;
+            *)
+              echo "Unsupported Pandoc archive: ${{ matrix.pandocAsset }}"
+              exit 1
+              ;;
+          esac
+          PANDOC_BIN="$(find "$EXTRACT_DIR" -type f -name pandoc | head -n 1)"
+          if [ -z "$PANDOC_BIN" ]; then
+            echo "Failed to locate extracted pandoc binary"
+            exit 1
+          fi
+          cp "$PANDOC_BIN" "src-tauri/binaries/pandoc-${{ matrix.rustTarget }}"
+          chmod +x "src-tauri/binaries/pandoc-${{ matrix.rustTarget }}"
+
+      - name: Download bundled Pandoc (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force src-tauri/binaries | Out-Null
+          $tempDir = Join-Path $env:RUNNER_TEMP "pandoc-sidecar"
+          if (Test-Path $tempDir) {
+            Remove-Item $tempDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force $tempDir | Out-Null
+          $archivePath = Join-Path $tempDir "${{ matrix.pandocAsset }}"
+          $extractDir = Join-Path $tempDir "extract"
+          Invoke-WebRequest "https://github.com/jgm/pandoc/releases/download/$env:PANDOC_VERSION/${{ matrix.pandocAsset }}" -OutFile $archivePath
+          Expand-Archive -Path $archivePath -DestinationPath $extractDir -Force
+          $pandoc = Get-ChildItem -Path $extractDir -Recurse -Filter pandoc.exe | Select-Object -First 1
+          if (-not $pandoc) {
+            throw "Failed to locate extracted pandoc.exe"
+          }
+          Copy-Item $pandoc.FullName "src-tauri/binaries/pandoc-${{ matrix.rustTarget }}.exe"
+
+      - name: Verify bundled Pandoc (Unix)
+        if: matrix.platform != 'windows-latest'
+        shell: bash
+        run: |
+          ls -la src-tauri/binaries
+
+      - name: Verify bundled Pandoc (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          Get-ChildItem src-tauri/binaries
 
       - name: Use repository icon assets
         run: |

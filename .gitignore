@@ -50,6 +50,7 @@ server.log
 
 # Tauri
 src-tauri/target/
+src-tauri/binaries/
 
 # Electron build output
 dist/
