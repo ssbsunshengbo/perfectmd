@@ -18,6 +18,17 @@ interface StyleInfo {
   code?: boolean
 }
 
+export interface ExportBinaryAsset {
+  relativePath: string
+  mimeType: string
+  base64Data: string
+}
+
+export interface MarkdownExportPayload {
+  markdown: string
+  assets: ExportBinaryAsset[]
+}
+
 function parseStyle(styleStr: string): StyleInfo {
   const style: StyleInfo = {}
   const parts = styleStr.split(';').map((s) => s.trim()).filter(Boolean)
@@ -33,6 +44,26 @@ function parseStyle(styleStr: string): StyleInfo {
 
 function normalizeCodeText(text: string): string {
   return text.replace(/\u200B/g, '').replace(/\r\n?/g, '\n').replace(/\n$/, '')
+}
+
+function extensionFromMimeType(mimeType: string): string {
+  const normalized = mimeType.toLowerCase()
+  if (normalized === 'image/jpeg') return 'jpg'
+  if (normalized === 'image/svg+xml') return 'svg'
+  if (normalized === 'image/x-icon') return 'ico'
+  if (normalized === 'image/heic') return 'heic'
+  if (normalized === 'image/heif') return 'heif'
+  const [, subtype = 'bin'] = normalized.split('/')
+  return subtype.replace(/[^a-z0-9]+/g, '') || 'bin'
+}
+
+function parseDataUrl(dataUrl: string): { mimeType: string; base64Data: string } | null {
+  const match = dataUrl.match(/^data:([^;,]+)?;base64,(.+)$/i)
+  if (!match) return null
+  return {
+    mimeType: (match[1] || 'application/octet-stream').trim().toLowerCase(),
+    base64Data: match[2],
+  }
 }
 
 function normalizeInlineLatex(raw: string): string {
@@ -267,6 +298,66 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
+async function resolveImageSourceToAsset(source: string, index: number): Promise<ExportBinaryAsset | null> {
+  const trimmedSource = source.trim()
+  if (!trimmedSource) return null
+
+  if (trimmedSource.startsWith('http://') || trimmedSource.startsWith('https://')) {
+    return null
+  }
+
+  let blob: Blob | null = null
+
+  if (trimmedSource.startsWith('data:') || trimmedSource.startsWith('blob:')) {
+    try {
+      const response = await fetch(trimmedSource)
+      blob = await response.blob()
+    } catch {
+      return null
+    }
+  } else {
+    const { IMAGE_PROTOCOL, getImageBlob } = await import('@/store/editor-store')
+    if (!trimmedSource.startsWith(IMAGE_PROTOCOL)) return null
+    const imageId = trimmedSource.slice(IMAGE_PROTOCOL.length)
+    try {
+      const stored = await getImageBlob(imageId)
+      blob = stored?.blob || null
+    } catch {
+      blob = null
+    }
+  }
+
+  if (!blob) return null
+
+  const dataUrl = await blobToDataUrl(blob)
+  const parsed = parseDataUrl(dataUrl)
+  if (!parsed) return null
+  const extension = extensionFromMimeType(parsed.mimeType)
+
+  return {
+    relativePath: `assets/image-${index}.${extension}`,
+    mimeType: parsed.mimeType,
+    base64Data: parsed.base64Data,
+  }
+}
+
+async function prepareHtmlForBinaryExport(html: string): Promise<{ html: string; assets: ExportBinaryAsset[] }> {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  const assets: ExportBinaryAsset[] = []
+
+  const imageElements = Array.from(doc.body.querySelectorAll('img'))
+  for (const [index, img] of imageElements.entries()) {
+    const source = img.getAttribute('src') || ''
+    const asset = await resolveImageSourceToAsset(source, index + 1)
+    if (!asset) continue
+    img.setAttribute('src', asset.relativePath)
+    assets.push(asset)
+  }
+
+  return { html: doc.body.innerHTML, assets }
+}
+
 /**
  * Resolve pmd-image:// references in HTML to data URLs for export.
  */
@@ -318,4 +409,12 @@ export async function downloadMarkdown(html: string, title: string): Promise<voi
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+export async function prepareMarkdownExportPayload(html: string, title: string): Promise<MarkdownExportPayload> {
+  const prepared = await prepareHtmlForBinaryExport(html)
+  return {
+    markdown: htmlToMarkdown(prepared.html, title),
+    assets: prepared.assets,
+  }
 }

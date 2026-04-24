@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { FileText, Save, Palette, Download, FileDown, Moon, Sun } from 'lucide-react'
 import { saveAsMarkdown, exportAsPdf } from '@/lib/document-export'
+import { exportAsDocx } from '@/lib/docx-export'
 import { useTheme } from 'next-themes'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
@@ -593,6 +594,21 @@ export function Header() {
     else if (result === 'fallback') toast.error('PDF 导出失败，请重试')
   }, [currentDocument])
 
+  const handleExportDocx = useCallback(async () => {
+    if (!currentDocument) return
+    toast.info('正在导出 Word…')
+    const result = await exportAsDocx(currentDocument.content, currentDocument.title)
+    if (result === 'saved') toast.success('Word 导出成功')
+    else if (result === 'cancelled') toast.info('已取消导出')
+    else if (result === 'missing_dependency') {
+      toast.error('未检测到 Pandoc，请先安装 Pandoc 后再试')
+    } else if (result === 'unsupported') {
+      toast.error('当前环境暂不支持 Word 导出，请在桌面版中使用')
+    } else {
+      toast.error('Word 导出失败，请重试')
+    }
+  }, [currentDocument])
+
   // Auto-save on Ctrl+S
   useEffect(() => {
     const handleSave = () => {
@@ -724,6 +740,16 @@ export function Header() {
             >
               <FileDown className="h-4 w-4" />
               导出PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportDocx}
+              title="导出为 Word 文档"
+              className="gap-1"
+            >
+              <FileText className="h-4 w-4" />
+              导出Word
             </Button>
           </>
         )}
