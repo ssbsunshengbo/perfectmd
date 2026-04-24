@@ -3,12 +3,10 @@ import { save } from '@tauri-apps/plugin-dialog'
 
 import { prepareMarkdownExportPayload } from './html-to-markdown'
 
-export type DocxExportResult =
-  | 'saved'
-  | 'cancelled'
-  | 'unsupported'
-  | 'missing_dependency'
-  | 'failed'
+export interface DocxExportResult {
+  status: 'saved' | 'cancelled' | 'unsupported' | 'missing_dependency' | 'failed'
+  message?: string
+}
 
 interface ExportDocxCommandPayload {
   outputPath: string
@@ -37,8 +35,15 @@ function extractErrorMessage(error: unknown): string {
   return ''
 }
 
+function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/^PANDOC_[A-Z_]+:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export async function exportAsDocx(content: string, title: string): Promise<DocxExportResult> {
-  if (!isTauriRuntime()) return 'unsupported'
+  if (!isTauriRuntime()) return { status: 'unsupported' }
 
   const safeTitle = sanitizeFileBaseName(title)
   const outputPath = await save({
@@ -46,7 +51,7 @@ export async function exportAsDocx(content: string, title: string): Promise<Docx
     filters: [{ name: 'Word Document', extensions: ['docx'] }],
   })
 
-  if (!outputPath) return 'cancelled'
+  if (!outputPath) return { status: 'cancelled' }
 
   try {
     const payload = await prepareMarkdownExportPayload(content, title)
@@ -57,10 +62,18 @@ export async function exportAsDocx(content: string, title: string): Promise<Docx
         assets: payload.assets,
       } satisfies ExportDocxCommandPayload,
     })
-    return 'saved'
+    return { status: 'saved' }
   } catch (error) {
     const message = extractErrorMessage(error)
-    if (message.includes('PANDOC_NOT_FOUND')) return 'missing_dependency'
-    return 'failed'
+    if (message.includes('PANDOC_NOT_FOUND')) {
+      return {
+        status: 'missing_dependency',
+        message: '当前安装包未包含可用的 Pandoc，或系统环境里也没有找到 Pandoc。',
+      }
+    }
+    return {
+      status: 'failed',
+      message: sanitizeErrorMessage(message),
+    }
   }
 }

@@ -67,9 +67,16 @@ jobs:
           const existingExternalBin = Array.isArray(tauri.bundle.externalBin)
             ? tauri.bundle.externalBin
             : [];
+          const existingResources = Array.isArray(tauri.bundle.resources)
+            ? tauri.bundle.resources
+            : [];
           tauri.bundle.externalBin = Array.from(new Set([
             ...existingExternalBin,
             'binaries/pandoc'
+          ]));
+          tauri.bundle.resources = Array.from(new Set([
+            ...existingResources,
+            'resources/reference.docx'
           ]));
           fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + '\n');
 
@@ -143,6 +150,17 @@ jobs:
           cp "$PANDOC_BIN" "src-tauri/binaries/pandoc-${{ matrix.rustTarget }}"
           chmod +x "src-tauri/binaries/pandoc-${{ matrix.rustTarget }}"
 
+      - name: Build Word reference template (Unix)
+        if: matrix.platform != 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src-tauri/resources
+          "src-tauri/binaries/pandoc-${{ matrix.rustTarget }}" \
+            -o "src-tauri/resources/reference.docx" \
+            --print-default-data-file reference.docx
+          python3 scripts/prepare_reference_docx.py "src-tauri/resources/reference.docx"
+
       - name: Download bundled Pandoc (Windows)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
@@ -163,6 +181,16 @@ jobs:
           }
           Copy-Item $pandoc.FullName "src-tauri/binaries/pandoc-${{ matrix.rustTarget }}.exe"
 
+      - name: Build Word reference template (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force src-tauri/resources | Out-Null
+          & "src-tauri/binaries/pandoc-${{ matrix.rustTarget }}.exe" `
+            -o "src-tauri/resources/reference.docx" `
+            --print-default-data-file reference.docx
+          python scripts/prepare_reference_docx.py "src-tauri/resources/reference.docx"
+
       - name: Verify bundled Pandoc (Unix)
         if: matrix.platform != 'windows-latest'
         shell: bash
@@ -174,6 +202,18 @@ jobs:
         shell: pwsh
         run: |
           Get-ChildItem src-tauri/binaries
+
+      - name: Verify Word export resources (Unix)
+        if: matrix.platform != 'windows-latest'
+        shell: bash
+        run: |
+          ls -la src-tauri/resources
+
+      - name: Verify Word export resources (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          Get-ChildItem src-tauri/resources
 
       - name: Use repository icon assets
         run: |

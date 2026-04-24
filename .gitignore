@@ -51,6 +51,7 @@ server.log
 # Tauri
 src-tauri/target/
 src-tauri/binaries/
+src-tauri/resources/reference.docx
 
 # Electron build output
 dist/
@@ -67,6 +68,7 @@ prisma/
 # IDE
 .idea/
 .vscode/
+__pycache__/
 *.swp
 *.swo
 

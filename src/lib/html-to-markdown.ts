@@ -29,6 +29,11 @@ export interface MarkdownExportPayload {
   assets: ExportBinaryAsset[]
 }
 
+interface MarkdownConvertOptions {
+  includeTitleHeading?: boolean
+  preserveImageStyles?: boolean
+}
+
 function parseStyle(styleStr: string): StyleInfo {
   const style: StyleInfo = {}
   const parts = styleStr.split(';').map((s) => s.trim()).filter(Boolean)
@@ -44,6 +49,14 @@ function parseStyle(styleStr: string): StyleInfo {
 
 function normalizeCodeText(text: string): string {
   return text.replace(/\u200B/g, '').replace(/\r\n?/g, '\n').replace(/\n$/, '')
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 }
 
 function extensionFromMimeType(mimeType: string): string {
@@ -142,7 +155,39 @@ function convertTable(table: Element): string {
   return `${result}\n`
 }
 
-function processNode(node: Node, inheritedStyle: StyleInfo = {}): string {
+function renderImageElement(element: Element, options: MarkdownConvertOptions): string {
+  const src = (element.getAttribute('src') || '').trim()
+  const alt = (element.getAttribute('alt') || '').trim()
+  if (!options.preserveImageStyles) {
+    return `![${alt}](${src})`
+  }
+
+  const imageElement = element as HTMLElement
+  const widthStyle = imageElement.style.width.trim()
+  const heightStyle = imageElement.style.height.trim()
+  const maxWidthStyle = imageElement.style.maxWidth.trim()
+  const widthAttr = (element.getAttribute('width') || '').trim()
+  const heightAttr = (element.getAttribute('height') || '').trim()
+
+  const attrs = [`src="${escapeHtmlAttribute(src)}"`]
+  if (alt) attrs.push(`alt="${escapeHtmlAttribute(alt)}"`)
+
+  if (widthAttr) attrs.push(`width="${escapeHtmlAttribute(widthAttr)}"`)
+  else if (/^\d+(?:\.\d+)?px$/i.test(widthStyle)) attrs.push(`width="${escapeHtmlAttribute(widthStyle.replace(/px$/i, ''))}"`)
+
+  if (heightAttr) attrs.push(`height="${escapeHtmlAttribute(heightAttr)}"`)
+  else if (/^\d+(?:\.\d+)?px$/i.test(heightStyle)) attrs.push(`height="${escapeHtmlAttribute(heightStyle.replace(/px$/i, ''))}"`)
+
+  const styleParts: string[] = []
+  if (widthStyle && !/^\d+(?:\.\d+)?px$/i.test(widthStyle)) styleParts.push(`width:${widthStyle}`)
+  if (heightStyle && !/^\d+(?:\.\d+)?px$/i.test(heightStyle)) styleParts.push(`height:${heightStyle}`)
+  if (maxWidthStyle) styleParts.push(`max-width:${maxWidthStyle}`)
+  if (styleParts.length > 0) attrs.push(`style="${escapeHtmlAttribute(styleParts.join(';'))}"`)
+
+  return `<img ${attrs.join(' ')} />`
+}
+
+function processNode(node: Node, inheritedStyle: StyleInfo = {}, options: MarkdownConvertOptions = {}): string {
   if (node.nodeType === Node.TEXT_NODE) {
     const text = node.textContent || ''
     if (!text) return ''
@@ -193,7 +238,7 @@ function processNode(node: Node, inheritedStyle: StyleInfo = {}): string {
 
   let childrenContent = ''
   for (const child of node.childNodes) {
-    childrenContent += processNode(child, style)
+    childrenContent += processNode(child, style, options)
   }
 
   switch (tagName) {
@@ -246,11 +291,8 @@ function processNode(node: Node, inheritedStyle: StyleInfo = {}): string {
       const href = element.getAttribute('href') || ''
       return `[${childrenContent || href}](${href})`
     }
-    case 'img': {
-      const src = element.getAttribute('src') || ''
-      const alt = element.getAttribute('alt') || ''
-      return `![${alt}](${src})`
-    }
+    case 'img':
+      return renderImageElement(element, options)
     case 'table':
       return convertTable(element)
     default:
@@ -258,7 +300,7 @@ function processNode(node: Node, inheritedStyle: StyleInfo = {}): string {
   }
 }
 
-export function htmlToMarkdown(html: string, title: string): string {
+export function htmlToMarkdown(html: string, title: string, options: MarkdownConvertOptions = {}): string {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
 
@@ -267,9 +309,10 @@ export function htmlToMarkdown(html: string, title: string): string {
     .querySelectorAll('.code-controls, .code-copy-btn, .code-wrap-toggle, .code-copy-toast, [data-copy-code-btn], [data-code-lang-select], [data-code-wrap-toggle]')
     .forEach((node) => node.remove())
 
-  let markdown = `# ${title}\n\n`
+  const includeTitleHeading = options.includeTitleHeading ?? true
+  let markdown = includeTitleHeading ? `# ${title}\n\n` : ''
   for (const child of doc.body.childNodes) {
-    markdown += processNode(child)
+    markdown += processNode(child, {}, options)
   }
 
   markdown = markdown
@@ -413,8 +456,19 @@ export async function downloadMarkdown(html: string, title: string): Promise<voi
 
 export async function prepareMarkdownExportPayload(html: string, title: string): Promise<MarkdownExportPayload> {
   const prepared = await prepareHtmlForBinaryExport(html)
+  const body = htmlToMarkdown(prepared.html, title, {
+    includeTitleHeading: false,
+    preserveImageStyles: true,
+  }).trim()
+  const frontMatter = [
+    '---',
+    `title: ${JSON.stringify(title || 'Untitled')}`,
+    'lang: zh-CN',
+    '---',
+    '',
+  ].join('\n')
   return {
-    markdown: htmlToMarkdown(prepared.html, title),
+    markdown: body ? `${frontMatter}${body}\n` : `${frontMatter}\n`,
     assets: prepared.assets,
   }
 }

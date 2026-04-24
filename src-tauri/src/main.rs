@@ -8,6 +8,7 @@ use std::{
 };
 
 use serde::Deserialize;
+use tauri::{path::BaseDirectory, Manager};
 use tauri_plugin_shell::ShellExt;
 
 #[derive(Debug, Deserialize)]
@@ -80,6 +81,18 @@ async fn run_pandoc(app: &tauri::AppHandle, cwd: &Path, args: &[String]) -> Resu
             Err(format!("PANDOC_IO_ERROR: {err}"))
         }
     }
+}
+
+fn resolve_optional_resource(app: &tauri::AppHandle, relative_path: &str) -> Option<PathBuf> {
+    let candidates = [relative_path.to_string(), format!("resources/{relative_path}")];
+    for candidate in candidates {
+        if let Ok(path) = app.path().resolve(&candidate, BaseDirectory::Resource) {
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+    None
 }
 
 fn unique_export_dir() -> PathBuf {
@@ -176,14 +189,21 @@ async fn export_docx(app: tauri::AppHandle, payload: ExportDocxPayload) -> Resul
 
         let pandoc_args = vec![
             markdown_path.to_string_lossy().to_string(),
-            "--from=gfm+tex_math_dollars".to_string(),
+            "--from=gfm+tex_math_dollars+yaml_metadata_block".to_string(),
             "--to=docx".to_string(),
             "--standalone".to_string(),
+            "--syntax-highlighting=tango".to_string(),
             "--resource-path".to_string(),
             export_dir.to_string_lossy().to_string(),
-            "--output".to_string(),
-            Path::new(&payload.output_path).to_string_lossy().to_string(),
         ];
+
+        let mut pandoc_args = pandoc_args;
+        if let Some(reference_doc_path) = resolve_optional_resource(&app, "reference.docx") {
+            pandoc_args.push("--reference-doc".to_string());
+            pandoc_args.push(reference_doc_path.to_string_lossy().to_string());
+        }
+        pandoc_args.push("--output".to_string());
+        pandoc_args.push(Path::new(&payload.output_path).to_string_lossy().to_string());
 
         let command_output = run_pandoc(&app, &export_dir, &pandoc_args).await?;
 
