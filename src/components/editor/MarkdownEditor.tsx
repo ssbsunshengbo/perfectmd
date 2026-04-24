@@ -35,6 +35,7 @@ import { useImageHandling } from './use-image-handling'
 import { IMAGE_PROTOCOL, getImageBlob } from '@/store/editor-store'
 import { warmupCodeHighlighter } from '@/lib/code-highlighter'
 import { normalizeCodeLanguage } from '@/lib/code-languages'
+import { extractCodeBlockText } from '@/lib/code-block-text'
 
 interface MarkdownEditorProps {
   content: string
@@ -159,7 +160,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         .forEach((node) => node.remove())
       template.content.querySelectorAll('.code-block-wrapper pre code').forEach((node) => {
         const codeEl = node as HTMLElement
-        const rawText = (codeEl.textContent || '').replace(/\u200B/g, '')
+        const rawText = extractCodeBlockText(codeEl)
         codeEl.textContent = rawText
         codeEl.removeAttribute('data-highlighted')
         codeEl.removeAttribute('data-highlight-theme')

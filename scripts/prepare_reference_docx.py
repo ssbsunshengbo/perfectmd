@@ -79,9 +79,15 @@ def set_font_size(rpr: ET.Element, half_points: int) -> None:
     size_cs.set(w_attr("val"), str(half_points))
 
 
+def clear_attributes(element: ET.Element, *names: str) -> None:
+    for name in names:
+        element.attrib.pop(w_attr(name), None)
+
+
 def set_run_color(rpr: ET.Element, color: str) -> None:
     color_el = get_or_create(rpr, w_tag("color"))
     color_el.set(w_attr("val"), color)
+    clear_attributes(color_el, "themeColor", "themeTint", "themeShade")
 
 
 def set_toggle(rpr: ET.Element, tag_name: str, enabled: bool) -> None:
@@ -122,6 +128,15 @@ def set_paragraph_shading(ppr: ET.Element, fill: str) -> None:
     shading.set(w_attr("val"), "clear")
     shading.set(w_attr("color"), "auto")
     shading.set(w_attr("fill"), fill)
+    clear_attributes(shading, "themeFill", "themeFillTint", "themeFillShade")
+
+
+def set_cell_shading(tc_pr: ET.Element, fill: str) -> None:
+    shading = get_or_create(tc_pr, w_tag("shd"))
+    shading.set(w_attr("val"), "clear")
+    shading.set(w_attr("color"), "auto")
+    shading.set(w_attr("fill"), fill)
+    clear_attributes(shading, "themeFill", "themeFillTint", "themeFillShade")
 
 
 def set_paragraph_border_box(ppr: ET.Element, color: str, size: int = 4) -> None:
@@ -145,38 +160,67 @@ def set_left_border(ppr: ET.Element, color: str, size: int = 8) -> None:
 
 def set_table_defaults(style: ET.Element) -> None:
     tbl_pr = get_or_create(style, w_tag("tblPr"))
+    tbl_style_col_band = get_or_create(tbl_pr, w_tag("tblStyleColBandSize"))
+    tbl_style_col_band.set(w_attr("val"), "1")
+    tbl_style_row_band = get_or_create(tbl_pr, w_tag("tblStyleRowBandSize"))
+    tbl_style_row_band.set(w_attr("val"), "1")
+    tbl_look = get_or_create(tbl_pr, w_tag("tblLook"))
+    tbl_look.set(w_attr("firstRow"), "1")
+    tbl_look.set(w_attr("firstColumn"), "0")
+    tbl_look.set(w_attr("lastRow"), "0")
+    tbl_look.set(w_attr("lastColumn"), "0")
+    tbl_look.set(w_attr("noHBand"), "1")
+    tbl_look.set(w_attr("noVBand"), "1")
+    tbl_look.set(w_attr("val"), "04A0")
+
     borders = get_or_create(tbl_pr, w_tag("tblBorders"))
     for edge_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
         edge = get_or_create(borders, w_tag(edge_name))
         edge.set(w_attr("val"), "single")
         edge.set(w_attr("sz"), "6")
         edge.set(w_attr("space"), "0")
-        edge.set(w_attr("color"), "D1D5DB")
+        edge.set(w_attr("color"), "CBD5E1")
 
     cell_mar = get_or_create(tbl_pr, w_tag("tblCellMar"))
     for side_name in ("top", "left", "bottom", "right"):
         side = get_or_create(cell_mar, w_tag(side_name))
-        side.set(w_attr("w"), "90")
+        side.set(w_attr("w"), "108")
         side.set(w_attr("type"), "dxa")
 
+    whole_table = None
     first_row = None
+    band_one = None
     for candidate in style.findall(w_tag("tblStylePr")):
-        if candidate.get(w_attr("type")) == "firstRow":
+        kind = candidate.get(w_attr("type"))
+        if kind == "wholeTable":
+            whole_table = candidate
+        elif kind == "firstRow":
             first_row = candidate
-            break
+        elif kind == "band1Horz":
+            band_one = candidate
+
+    if whole_table is None:
+        whole_table = ET.SubElement(style, w_tag("tblStylePr"))
+        whole_table.set(w_attr("type"), "wholeTable")
+    whole_table_tc_pr = get_or_create(whole_table, w_tag("tcPr"))
+    set_cell_shading(whole_table_tc_pr, "FFFFFF")
+
     if first_row is None:
         first_row = ET.SubElement(style, w_tag("tblStylePr"))
         first_row.set(w_attr("type"), "firstRow")
 
     tc_pr = get_or_create(first_row, w_tag("tcPr"))
-    shading = get_or_create(tc_pr, w_tag("shd"))
-    shading.set(w_attr("val"), "clear")
-    shading.set(w_attr("color"), "auto")
-    shading.set(w_attr("fill"), "F3F4F6")
+    set_cell_shading(tc_pr, "E2E8F0")
 
     rpr = get_or_create(first_row, w_tag("rPr"))
     set_toggle(rpr, "b", True)
     set_run_color(rpr, "111827")
+
+    if band_one is None:
+        band_one = ET.SubElement(style, w_tag("tblStylePr"))
+        band_one.set(w_attr("type"), "band1Horz")
+    band_one_tc_pr = get_or_create(band_one, w_tag("tcPr"))
+    set_cell_shading(band_one_tc_pr, "F8FAFC")
 
 
 def configure_styles(styles_xml: Path) -> None:

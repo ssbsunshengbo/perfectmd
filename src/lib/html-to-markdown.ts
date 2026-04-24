@@ -6,6 +6,7 @@
  */
 
 import { normalizeCodeLanguage } from './code-languages'
+import { extractCodeBlockText, normalizeCodeBlockText } from './code-block-text'
 
 interface StyleInfo {
   color?: string
@@ -29,6 +30,20 @@ export interface MarkdownExportPayload {
   assets: ExportBinaryAsset[]
 }
 
+export interface DocxInlineStyleDefinition {
+  styleId: string
+  color?: string
+  backgroundColor?: string
+  fontSizeHalfPoints?: number
+}
+
+export interface DocxExportPayload {
+  title: string
+  html: string
+  assets: ExportBinaryAsset[]
+  inlineStyles: DocxInlineStyleDefinition[]
+}
+
 interface MarkdownConvertOptions {
   includeTitleHeading?: boolean
   preserveImageStyles?: boolean
@@ -45,10 +60,6 @@ function parseStyle(styleStr: string): StyleInfo {
     if (key === 'font-size') style.fontSize = value
   }
   return style
-}
-
-function normalizeCodeText(text: string): string {
-  return text.replace(/\u200B/g, '').replace(/\r\n?/g, '\n').replace(/\n$/, '')
 }
 
 function escapeHtmlAttribute(value: string): string {
@@ -112,6 +123,12 @@ function detectCodeLanguage(source: Element): string {
   const match = className.match(/language-([a-z0-9_+-]+)/i)
   const normalizedClassLang = normalizeCodeLanguage(match?.[1] || '')
   return normalizedClassLang === 'plaintext' ? '' : normalizedClassLang
+}
+
+function stripEditorOnlyNodes(root: ParentNode): void {
+  root
+    .querySelectorAll('.code-controls, .code-copy-btn, .code-wrap-toggle, .code-copy-toast, [data-copy-code-btn], [data-code-lang-select], [data-code-wrap-toggle]')
+    .forEach((node) => node.remove())
 }
 
 function applyInlineStyles(text: string, style: StyleInfo): string {
@@ -202,7 +219,7 @@ function processNode(node: Node, inheritedStyle: StyleInfo = {}, options: Markdo
 
   if (tagName === 'div' && element.classList.contains('code-block-wrapper')) {
     const code = element.querySelector('pre.editor-code-block code, pre code') as HTMLElement | null
-    const codeText = normalizeCodeText(code?.textContent || '')
+    const codeText = extractCodeBlockText(code || element)
     const lang = detectCodeLanguage(code || element)
     return `\n\`\`\`${lang}\n${codeText}\n\`\`\`\n\n`
   }
@@ -283,7 +300,7 @@ function processNode(node: Node, inheritedStyle: StyleInfo = {}, options: Markdo
     }
     case 'pre': {
       const codeEl = element.querySelector('code') as HTMLElement | null
-      const codeText = normalizeCodeText(codeEl?.textContent || element.textContent || '')
+      const codeText = codeEl ? extractCodeBlockText(codeEl) : normalizeCodeBlockText(element.textContent || '')
       const lang = detectCodeLanguage(codeEl || element)
       return `\n\`\`\`${lang}\n${codeText}\n\`\`\`\n\n`
     }
@@ -304,10 +321,7 @@ export function htmlToMarkdown(html: string, title: string, options: MarkdownCon
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
 
-  // Remove editor-only controls before conversion.
-  doc.body
-    .querySelectorAll('.code-controls, .code-copy-btn, .code-wrap-toggle, .code-copy-toast, [data-copy-code-btn], [data-code-lang-select], [data-code-wrap-toggle]')
-    .forEach((node) => node.remove())
+  stripEditorOnlyNodes(doc.body)
 
   const includeTitleHeading = options.includeTitleHeading ?? true
   let markdown = includeTitleHeading ? `# ${title}\n\n` : ''
@@ -401,6 +415,207 @@ async function prepareHtmlForBinaryExport(html: string): Promise<{ html: string;
   return { html: doc.body.innerHTML, assets }
 }
 
+function resolveCssColor(color: string): string {
+  if (typeof document === 'undefined' || !document.body) return color
+  const probe = document.createElement('span')
+  probe.style.color = color
+  probe.style.position = 'absolute'
+  probe.style.visibility = 'hidden'
+  probe.style.pointerEvents = 'none'
+  document.body.appendChild(probe)
+  const resolved = getComputedStyle(probe).color || color
+  document.body.removeChild(probe)
+  return resolved
+}
+
+function cssColorToHex(color: string | undefined): string | null {
+  if (!color) return null
+  const resolved = resolveCssColor(color).trim()
+  if (!resolved || resolved === 'transparent' || resolved === 'inherit') return null
+
+  const parts = resolved.match(/[\d.]+/g)
+  if (!parts || parts.length < 3) return null
+
+  const channels = parts.slice(0, 3).map((value) => Number(value))
+  if (channels.some((value) => Number.isNaN(value))) return null
+
+  const alpha = parts.length >= 4 ? Number(parts[3]) : 1
+  if (!Number.isNaN(alpha) && alpha <= 0.01) return null
+
+  const blended = channels.map((channel) => {
+    if (Number.isNaN(alpha) || alpha >= 1) return channel
+    return 255 * (1 - alpha) + channel * alpha
+  })
+
+  return blended
+    .map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0').toUpperCase())
+    .join('')
+}
+
+function cssFontSizeToHalfPoints(fontSize: string | undefined): number | null {
+  if (!fontSize) return null
+  const trimmed = fontSize.trim()
+  const match = trimmed.match(/^([\d.]+)(px|pt)$/i)
+  if (!match) return null
+  const value = Number(match[1])
+  if (!Number.isFinite(value) || value <= 0) return null
+  const unit = match[2].toLowerCase()
+  const points = unit === 'pt' ? value : value * 0.75
+  const halfPoints = Math.round(points * 2)
+  return halfPoints > 0 ? halfPoints : null
+}
+
+function replaceFontWithSpan(element: Element): HTMLElement {
+  const doc = element.ownerDocument
+  const span = doc.createElement('span')
+  Array.from(element.attributes).forEach((attribute) => {
+    span.setAttribute(attribute.name, attribute.value)
+  })
+  while (element.firstChild) {
+    span.appendChild(element.firstChild)
+  }
+  element.replaceWith(span)
+  return span
+}
+
+function stripInlinePresentationAttrs(element: HTMLElement): void {
+  element.style.removeProperty('color')
+  element.style.removeProperty('background-color')
+  element.style.removeProperty('background')
+  element.style.removeProperty('font-size')
+  if (!element.getAttribute('style')?.trim()) {
+    element.removeAttribute('style')
+  }
+  element.removeAttribute('color')
+  element.removeAttribute('bgcolor')
+  element.removeAttribute('size')
+}
+
+function registerDocxInlineStyle(
+  style: StyleInfo,
+  registry: Map<string, DocxInlineStyleDefinition>
+): string | null {
+  const color = cssColorToHex(style.color)
+  const backgroundColor = cssColorToHex(style.backgroundColor)
+  const fontSizeHalfPoints = cssFontSizeToHalfPoints(style.fontSize)
+
+  if (!color && !backgroundColor && !fontSizeHalfPoints) return null
+
+  const styleKey = [color || '', backgroundColor || '', String(fontSizeHalfPoints || '')].join('|')
+  const existing = registry.get(styleKey)
+  if (existing) return existing.styleId
+
+  const styleId = `PMDInlineStyle${registry.size + 1}`
+  const definition: DocxInlineStyleDefinition = {
+    styleId,
+    ...(color ? { color } : {}),
+    ...(backgroundColor ? { backgroundColor } : {}),
+    ...(fontSizeHalfPoints ? { fontSizeHalfPoints } : {}),
+  }
+  registry.set(styleKey, definition)
+  return styleId
+}
+
+function normalizeDocxCodeBlocks(doc: Document): void {
+  const wrappers = Array.from(doc.body.querySelectorAll('.code-block-wrapper'))
+  wrappers.forEach((wrapper) => {
+    const lang = detectCodeLanguage(wrapper)
+    const codeText = extractCodeBlockText(wrapper)
+    const pre = doc.createElement('pre')
+    const code = doc.createElement('code')
+    if (lang) {
+      code.className = `language-${lang} ${lang}`
+      code.setAttribute('data-language', lang)
+      pre.className = `language-${lang} ${lang}`
+    }
+    code.textContent = codeText
+    pre.appendChild(code)
+    wrapper.replaceWith(pre)
+  })
+
+  Array.from(doc.body.querySelectorAll('pre')).forEach((pre) => {
+    const code = pre.querySelector('code')
+    if (!code) return
+    const lang = detectCodeLanguage(code)
+    const codeText = extractCodeBlockText(code)
+    code.textContent = codeText
+    code.removeAttribute('data-highlighted')
+    code.removeAttribute('data-highlight-theme')
+    if (lang) {
+      code.className = `language-${lang} ${lang}`
+      code.setAttribute('data-language', lang)
+      pre.className = `language-${lang} ${lang}`
+    } else {
+      code.removeAttribute('class')
+      code.removeAttribute('data-language')
+      pre.removeAttribute('class')
+    }
+  })
+}
+
+function replaceFormulaPlaceholders(doc: Document): void {
+  Array.from(doc.body.querySelectorAll('.formula-inline')).forEach((element) => {
+    const latex = normalizeInlineLatex(
+      element.getAttribute('data-latex') ||
+      (element as HTMLElement).dataset?.latex ||
+      ''
+    )
+    if (!latex) {
+      element.remove()
+      return
+    }
+    element.replaceWith(doc.createTextNode(`$${latex}$`))
+  })
+}
+
+function applyDocxInlineStyles(doc: Document): DocxInlineStyleDefinition[] {
+  const registry = new Map<string, DocxInlineStyleDefinition>()
+
+  Array.from(doc.body.querySelectorAll('font')).forEach((element) => {
+    replaceFontWithSpan(element)
+  })
+
+  Array.from(doc.body.querySelectorAll<HTMLElement>('span, code, em, strong, b, i, u, s, del, mark, a')).forEach((element) => {
+    if (element.closest('pre')) return
+
+    const styleAttr = element.getAttribute('style')
+    const style = styleAttr ? parseStyle(styleAttr) : {}
+    const colorAttr = element.getAttribute('color')
+    if (colorAttr) style.color = colorAttr
+    const bgColorAttr = element.getAttribute('bgcolor')
+    if (bgColorAttr) style.backgroundColor = bgColorAttr
+
+    const styleId = registerDocxInlineStyle(style, registry)
+    if (!styleId) return
+
+    if (element.tagName.toLowerCase() === 'a') {
+      const wrapper = doc.createElement('span')
+      wrapper.setAttribute('custom-style', styleId)
+      while (element.firstChild) {
+        wrapper.appendChild(element.firstChild)
+      }
+      element.appendChild(wrapper)
+      stripInlinePresentationAttrs(element)
+      return
+    }
+
+    element.setAttribute('custom-style', styleId)
+    stripInlinePresentationAttrs(element)
+  })
+
+  return Array.from(registry.values())
+}
+
+function buildDocxHtmlDocument(bodyHtml: string): string {
+  return [
+    '<!DOCTYPE html>',
+    '<html lang="zh-CN">',
+    '<head><meta charset="utf-8" /></head>',
+    `<body>${bodyHtml}</body>`,
+    '</html>',
+  ].join('')
+}
+
 /**
  * Resolve pmd-image:// references in HTML to data URLs for export.
  */
@@ -470,5 +685,33 @@ export async function prepareMarkdownExportPayload(html: string, title: string):
   return {
     markdown: body ? `${frontMatter}${body}\n` : `${frontMatter}\n`,
     assets: prepared.assets,
+  }
+}
+
+export async function prepareDocxExportPayload(html: string, title: string): Promise<DocxExportPayload> {
+  const prepared = await prepareHtmlForBinaryExport(html)
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(prepared.html, 'text/html')
+
+  stripEditorOnlyNodes(doc.body)
+  replaceFormulaPlaceholders(doc)
+  normalizeDocxCodeBlocks(doc)
+
+  Array.from(doc.body.querySelectorAll('table')).forEach((table) => {
+    table.setAttribute('custom-style', 'Table')
+  })
+
+  doc.body.querySelectorAll<HTMLElement>('*').forEach((element) => {
+    element.removeAttribute('contenteditable')
+    element.removeAttribute('spellcheck')
+  })
+
+  const inlineStyles = applyDocxInlineStyles(doc)
+
+  return {
+    title: title || 'Untitled',
+    html: buildDocxHtmlDocument(doc.body.innerHTML),
+    assets: prepared.assets,
+    inlineStyles,
   }
 }

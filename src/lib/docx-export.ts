@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 
-import { prepareMarkdownExportPayload } from './html-to-markdown'
+import { prepareDocxExportPayload } from './html-to-markdown'
 
 export interface DocxExportResult {
   status: 'saved' | 'cancelled' | 'unsupported' | 'missing_dependency' | 'failed'
@@ -10,11 +10,18 @@ export interface DocxExportResult {
 
 interface ExportDocxCommandPayload {
   outputPath: string
-  markdown: string
+  title: string
+  html: string
   assets: Array<{
     relativePath: string
     mimeType: string
     base64Data: string
+  }>
+  inlineStyles: Array<{
+    styleId: string
+    color?: string
+    backgroundColor?: string
+    fontSizeHalfPoints?: number
   }>
 }
 
@@ -54,12 +61,14 @@ export async function exportAsDocx(content: string, title: string): Promise<Docx
   if (!outputPath) return { status: 'cancelled' }
 
   try {
-    const payload = await prepareMarkdownExportPayload(content, title)
+    const payload = await prepareDocxExportPayload(content, title)
     await invoke('export_docx', {
       payload: {
         outputPath,
-        markdown: payload.markdown,
+        title: payload.title,
+        html: payload.html,
         assets: payload.assets,
+        inlineStyles: payload.inlineStyles,
       } satisfies ExportDocxCommandPayload,
     })
     return { status: 'saved' }
