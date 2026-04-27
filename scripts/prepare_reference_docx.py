@@ -249,6 +249,12 @@ def configure_styles(styles_xml: Path) -> None:
     set_run_color(normal_rpr, "1F2937")
     set_paragraph_spacing(get_or_create(normal, w_tag("pPr")), after=120, line=336, line_rule="auto")
 
+    default_paragraph_font = ensure_character_style(root, "DefaultParagraphFont", "Default Paragraph Font")
+    default_paragraph_font_rpr = get_or_create(default_paragraph_font, w_tag("rPr"))
+    set_run_fonts(default_paragraph_font_rpr, ascii_font="Aptos", cs_font="Aptos")
+    set_font_size(default_paragraph_font_rpr, 22)
+    set_run_color(default_paragraph_font_rpr, "1F2937")
+
     body_text = ensure_paragraph_style(root, "BodyText", "Body Text")
     set_paragraph_spacing(get_or_create(body_text, w_tag("pPr")), after=120, line=336, line_rule="auto")
 
@@ -319,10 +325,10 @@ def configure_styles(styles_xml: Path) -> None:
     source_code = ensure_paragraph_style(root, "SourceCode", "Source Code", based_on="Normal")
     source_rpr = get_or_create(source_code, w_tag("rPr"))
     set_run_fonts(source_rpr, ascii_font="Consolas", cs_font="Consolas")
-    set_font_size(source_rpr, 19)
+    set_font_size(source_rpr, 22)
     set_run_color(source_rpr, "111827")
     source_ppr = get_or_create(source_code, w_tag("pPr"))
-    set_paragraph_spacing(source_ppr, before=80, after=80, line=240, line_rule="auto")
+    set_paragraph_spacing(source_ppr, before=80, after=80, line=264, line_rule="auto")
     set_paragraph_indent(source_ppr, left=240, right=0)
     set_paragraph_shading(source_ppr, "F8FAFC")
     set_paragraph_border_box(source_ppr, "E5E7EB", size=6)
@@ -330,7 +336,7 @@ def configure_styles(styles_xml: Path) -> None:
     verbatim_char = ensure_character_style(root, "VerbatimChar", "Verbatim Char")
     verbatim_rpr = get_or_create(verbatim_char, w_tag("rPr"))
     set_run_fonts(verbatim_rpr, ascii_font="Consolas", cs_font="Consolas")
-    set_font_size(verbatim_rpr, 19)
+    set_font_size(verbatim_rpr, 22)
     set_run_color(verbatim_rpr, "111827")
 
     for style_id, display_name in (
