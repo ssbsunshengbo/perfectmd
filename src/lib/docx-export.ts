@@ -6,6 +6,7 @@ import { prepareDocxExportPayload } from './html-to-markdown'
 export interface DocxExportResult {
   status: 'saved' | 'cancelled' | 'unsupported' | 'missing_dependency' | 'failed'
   message?: string
+  outputPath?: string
 }
 
 interface ExportDocxCommandPayload {
@@ -71,7 +72,7 @@ export async function exportAsDocx(content: string, title: string): Promise<Docx
         inlineStyles: payload.inlineStyles,
       } satisfies ExportDocxCommandPayload,
     })
-    return { status: 'saved' }
+    return { status: 'saved', outputPath }
   } catch (error) {
     const message = extractErrorMessage(error)
     if (message.includes('PANDOC_NOT_FOUND')) {

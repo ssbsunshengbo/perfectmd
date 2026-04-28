@@ -598,8 +598,19 @@ export function Header() {
     if (!currentDocument) return
     toast.info('正在导出 Word…')
     const result = await exportAsDocx(currentDocument.content, currentDocument.title)
-    if (result.status === 'saved') toast.success('Word 导出成功')
-    else if (result.status === 'cancelled') toast.info('已取消导出')
+    if (result.status === 'saved') {
+      toast.success(
+        'Word 导出成功',
+        result.outputPath ? {
+          action: {
+            label: '打开',
+            onClick: () => {
+              void openExternal(result.outputPath || '')
+            },
+          },
+        } : undefined
+      )
+    } else if (result.status === 'cancelled') toast.info('已取消导出')
     else if (result.status === 'missing_dependency') {
       toast.error(result.message || '未检测到 Pandoc，请先安装 Pandoc 后再试')
     } else if (result.status === 'unsupported') {
