@@ -17,7 +17,7 @@ import {
   Database,
   ListTree,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,13 +47,18 @@ function markdownTextToBasicHtml(md: string): string {
   const escapeHtml = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
+  const escapeAttr = (s: string) =>
+    escapeHtml(s).replace(/"/g, '&quot;')
+
   const processInline = (text: string) => {
-    return text
+    return escapeHtml(text)
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
       .replace(/~~(.+?)~~/g, '<s>$1</s>')
       .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
+        return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`
+      })
   }
 
   const closeList = () => {
@@ -63,9 +68,51 @@ function markdownTextToBasicHtml(md: string): string {
     }
   }
 
-  for (const line of lines) {
+  const splitTableRow = (line: string): string[] | null => {
+    const trimmed = line.trim()
+    if (!trimmed.includes('|')) return null
+
+    const body = trimmed.replace(/^\|/, '').replace(/\|$/, '')
+    const cells: string[] = []
+    let current = ''
+    let escaped = false
+
+    for (const char of body) {
+      if (escaped) {
+        current += char
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '|') {
+        cells.push(current.trim())
+        current = ''
+      } else {
+        current += char
+      }
+    }
+    cells.push(current.trim())
+    return cells.length >= 2 ? cells : null
+  }
+
+  const isTableSeparator = (cells: string[]) =>
+    cells.length >= 2 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()))
+
+  const renderTable = (rows: string[][], hasSeparator: boolean) => {
+    const header = rows[0] || []
+    const bodyRows = hasSeparator ? rows.slice(1) : rows.slice(1)
+    const colCount = Math.max(...rows.map((row) => row.length), header.length, 1)
+    const normalizeRow = (row: string[]) => Array.from({ length: colCount }, (_, index) => row[index] || '')
+    const headHtml = normalizeRow(header).map((cell) => `<th>${processInline(cell)}</th>`).join('')
+    const bodyHtml = bodyRows.map((row) => (
+      `<tr>${normalizeRow(row).map((cell) => `<td>${processInline(cell)}</td>`).join('')}</tr>`
+    )).join('')
+    return `<table><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
     if (inCodeBlock) {
-      if (line.startsWith('```')) {
+      if (line.trimStart().startsWith('```')) {
         const codeContent = escapeHtml(codeLines.join('\n'))
         const normalizedLang = normalizeCodeLanguage(codeLang)
         htmlParts.push(
@@ -80,18 +127,39 @@ function markdownTextToBasicHtml(md: string): string {
       continue
     }
 
-    if (line.startsWith('```')) {
+    if (line.trimStart().startsWith('```')) {
       closeList()
       inCodeBlock = true
-      codeLang = normalizeCodeLanguage(line.slice(3).trim())
+      codeLang = normalizeCodeLanguage(line.trimStart().slice(3).trim())
       continue
     }
 
     if (line.startsWith('# ')) { closeList(); htmlParts.push(`<h1>${processInline(line.slice(2))}</h1>`); continue }
     if (line.startsWith('## ')) { closeList(); htmlParts.push(`<h2>${processInline(line.slice(3))}</h2>`); continue }
     if (line.startsWith('### ')) { closeList(); htmlParts.push(`<h3>${processInline(line.slice(4))}</h3>`); continue }
-    if (line.startsWith('---') || line.startsWith('***')) { closeList(); htmlParts.push('<hr>'); continue }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) { closeList(); htmlParts.push('<hr>'); continue }
     if (line.startsWith('> ')) { closeList(); htmlParts.push(`<blockquote><p>${processInline(line.slice(2))}</p></blockquote>`); continue }
+
+    const firstTableRow = splitTableRow(line)
+    if (firstTableRow) {
+      const rows = [firstTableRow]
+      let cursor = index + 1
+      const separatorRow = cursor < lines.length ? splitTableRow(lines[cursor]) : null
+      const hasSeparator = !!separatorRow && isTableSeparator(separatorRow)
+      if (hasSeparator) cursor += 1
+
+      while (cursor < lines.length) {
+        const row = splitTableRow(lines[cursor])
+        if (!row || isTableSeparator(row)) break
+        rows.push(row)
+        cursor += 1
+      }
+
+      closeList()
+      htmlParts.push(renderTable(rows, hasSeparator))
+      index = cursor - 1
+      continue
+    }
 
     const ulMatch = line.match(/^[-*+]\s+(.*)/)
     if (ulMatch) {
@@ -130,6 +198,7 @@ export function Sidebar({ onExport }: SidebarProps) {
     isSidebarOpen,
     setSidebarOpen,
     createDocument,
+    importMarkdownDocument,
     setCurrentDocument,
     deleteDocument,
     togglePin,
@@ -141,45 +210,8 @@ export function Sidebar({ onExport }: SidebarProps) {
   const [isCreating, setIsCreating] = useState(false)
   const [viewMode, setViewMode] = useState<'documents' | 'outline'>('documents')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
-  const [selectionStats, setSelectionStats] = useState({
-    documentId: '',
-    hasSelection: false,
-    charCount: 0,
-    wordCount: 0,
-  })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mdFileInputRef = useRef<HTMLInputElement>(null)
-  const currentDocumentId = currentDocument?.id || ''
-
-  useEffect(() => {
-    const handleSelectionStats = (event: Event) => {
-      const customEvent = event as CustomEvent<{
-        hasSelection?: boolean
-        charCount?: number
-        wordCount?: number
-      }>
-      setSelectionStats({
-        documentId: currentDocumentId,
-        hasSelection: !!customEvent.detail?.hasSelection,
-        charCount: customEvent.detail?.charCount || 0,
-        wordCount: customEvent.detail?.wordCount || 0,
-      })
-    }
-
-    window.addEventListener('editor-selection-stats', handleSelectionStats)
-    return () => {
-      window.removeEventListener('editor-selection-stats', handleSelectionStats)
-    }
-  }, [currentDocumentId])
-
-  const activeSelectionStats = selectionStats.documentId === currentDocumentId
-    ? selectionStats
-    : {
-        documentId: currentDocumentId,
-        hasSelection: false,
-        charCount: 0,
-        wordCount: 0,
-      }
 
   const filteredDocuments = documents.filter((doc) => {
     if (!searchQuery) return true
@@ -277,19 +309,13 @@ export function Sidebar({ onExport }: SidebarProps) {
         const text = await file.text()
         const title = file.name.replace(/\.(md|txt|markdown)$/i, '') || '未命名'
         const htmlContent = markdownTextToBasicHtml(text)
-        const doc = await createDocument()
-        if (doc) {
-          await useEditorStore.getState().updateCurrentTitle(title)
-          await useEditorStore.getState().updateCurrentContent(htmlContent)
-          await useEditorStore.getState().saveDocument()
-          imported++
-        }
+        const doc = await importMarkdownDocument(title, htmlContent)
+        if (doc) imported++
       } catch (error) {
         console.error('Import markdown error:', error)
       }
     }
     if (imported > 0) {
-      await useEditorStore.getState().fetchDocuments()
       toast.success(`已导入 ${imported} 篇 Markdown 文档`)
     } else {
       toast.error('导入失败')
@@ -576,15 +602,6 @@ export function Sidebar({ onExport }: SidebarProps) {
 
       <div className="border-t p-2 text-xs text-muted-foreground">
         <div>共 {documents.length} 篇文档</div>
-        {currentDocument && (() => {
-          const text = (currentDocument.content || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
-          const charCount = text.length
-          const wordCount = text ? text.split(/\s+/).length : 0
-                if (activeSelectionStats.hasSelection) {
-                  return <div>已选 {activeSelectionStats.charCount} 字符 · {activeSelectionStats.wordCount} 词</div>
-          }
-          return <div>全文 {charCount} 字符 · {wordCount} 词</div>
-        })()}
       </div>
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>

@@ -162,6 +162,10 @@ function hasCjk(text: string): boolean {
   return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(text)
 }
 
+function normalizePdfInlineText(text: string): string {
+  return text.replace(/\u200B/g, '').replace(/\r/g, '').replace(/[ \t\f\v]+/g, ' ')
+}
+
 function collectInlineSegments(node: Node, inherited: InlineStyle = {}): InlineSegment[] {
   if (node.nodeType === Node.TEXT_NODE) {
     const text = node.textContent || ''
@@ -259,10 +263,9 @@ function drawInlineSegments(
       newLine()
       continue
     }
-    const raw = segment.text.replace(/\r/g, '')
+    const raw = normalizePdfInlineText(segment.text)
     if (!raw) continue
     const style = segment.style
-    const fontName = style.monospace ? 'courier' : ctx.fontName
     const effectiveFontSize = style.fontSize || opts.fontSize
     const lineFactor = style.lineHeight && style.lineHeight > 3
       ? style.lineHeight / Math.max(1, effectiveFontSize)
@@ -271,25 +274,34 @@ function drawInlineSegments(
     currentLineStep = Math.max(currentLineStep, segmentStep)
     const preferItalic = !!style.italic
     const preferBold = !!style.bold
-    const canUseItalic = !(fontName === ctx.fontName && hasCjk(raw))
-    let fontWeight: 'normal' | 'italic' | 'bold' | 'bolditalic' = 'normal'
-    if (preferBold && preferItalic && canUseItalic) fontWeight = 'bolditalic'
-    else if (preferBold) fontWeight = ctx.hasBoldFont || fontName !== ctx.fontName ? 'bold' : 'normal'
-    else if (preferItalic && canUseItalic) fontWeight = 'italic'
     const textColor = style.linkHref
       ? ([25, 101, 214] as RgbColor)
       : style.color || ([30, 39, 51] as RgbColor)
     const bgColor = style.backgroundColor
-    const pieces = raw.split(/(\s+)/)
+    const pieces = raw.split(/(\n|\s+)/)
 
-    for (const piece of pieces) {
+    for (let piece of pieces) {
       if (!piece) continue
       if (piece === '\n') {
         newLine()
         continue
       }
+      if (/^\s+$/.test(piece)) {
+        if (x <= startX) continue
+        piece = ' '
+      }
 
-      ctx.pdf.setFont(fontName, fontWeight)
+      const pieceFontName = style.monospace
+        ? 'courier'
+        : hasCjk(piece)
+          ? ctx.cjkFontName
+          : ctx.latinFontName
+      const canUseItalic = !(pieceFontName === ctx.cjkFontName && hasCjk(piece))
+      let fontWeight: 'normal' | 'italic' | 'bold' | 'bolditalic' = 'normal'
+      if (preferBold && preferItalic && canUseItalic) fontWeight = 'bolditalic'
+      else if (preferBold) fontWeight = pieceFontName === ctx.cjkFontName ? 'normal' : 'bold'
+      else if (preferItalic && canUseItalic) fontWeight = 'italic'
+      ctx.pdf.setFont(pieceFontName, fontWeight)
       ctx.pdf.setFontSize(effectiveFontSize)
       const chunks = splitTokenToFit(ctx.pdf, piece, Math.max(12, maxX - x))
 
@@ -304,7 +316,7 @@ function drawInlineSegments(
         }
         ctx.pdf.setTextColor(textColor[0], textColor[1], textColor[2])
         ctx.pdf.text(chunk, x, y, { baseline: 'top' })
-        if (preferBold && fontWeight === 'normal') {
+        if (preferBold && fontWeight === 'normal' && pieceFontName === ctx.cjkFontName) {
           // Fallback for fonts without bold face (e.g. bundled CJK regular).
           ctx.pdf.text(chunk, x + 0.35, y, { baseline: 'top' })
         }
@@ -349,6 +361,8 @@ type PdfCtx = {
   width: number
   y: number
   fontName: string
+  latinFontName: string
+  cjkFontName: string
   hasBoldFont: boolean
 }
 
@@ -396,11 +410,11 @@ function drawWrappedParagraph(
   opts: { fontSize: number; lineHeight: number; leftIndent?: number; isBold?: boolean; spacingAfter?: number; fontName?: string },
 ): void {
   const raw = text.replace(/\r/g, '')
-  const normalized = raw.split('\n').map((line) => line.trimEnd())
+  const normalized = raw.split('\n').map((line) => line.replace(/[ \t\f\v]+/g, ' ').trimEnd())
   const leftIndent = opts.leftIndent || 0
   const availableWidth = Math.max(40, ctx.width - leftIndent)
-  const targetFont = opts.fontName || ctx.fontName
-  const targetWeight = opts.isBold && ctx.hasBoldFont ? 'bold' : 'normal'
+  const targetFont = opts.fontName || (hasCjk(raw) ? ctx.cjkFontName : ctx.latinFontName)
+  const targetWeight = opts.isBold && targetFont !== ctx.cjkFontName ? 'bold' : 'normal'
   ctx.pdf.setFont(targetFont, targetWeight)
   ctx.pdf.setFontSize(opts.fontSize)
   const step = opts.fontSize * opts.lineHeight
@@ -413,7 +427,7 @@ function drawWrappedParagraph(
     const wrapped = ctx.pdf.splitTextToSize(para, availableWidth)
     ensureSpace(ctx, wrapped.length * step)
     ctx.pdf.text(wrapped, ctx.left + leftIndent, ctx.y, { baseline: 'top' })
-    if (opts.isBold && !ctx.hasBoldFont && targetFont === ctx.fontName) {
+    if (opts.isBold && targetFont === ctx.cjkFontName) {
       wrapped.forEach((segment, idx) => {
         ctx.pdf.text(segment, ctx.left + leftIndent + 0.35, ctx.y + idx * step, { baseline: 'top' })
       })
@@ -432,11 +446,13 @@ function renderTable(ctx: PdfCtx, table: HTMLTableElement): void {
   const colWidth = ctx.width / colCount
   const fontSize = 10.5
   const lineHeight = 1.35
-  ctx.pdf.setFont(ctx.fontName, 'normal')
   ctx.pdf.setFontSize(fontSize)
   const step = fontSize * lineHeight
   rows.forEach((row, rowIndex) => {
-    const cellLines = row.map((cell) => ctx.pdf.splitTextToSize(cell || ' ', colWidth - 10))
+    const cellLines = row.map((cell) => {
+      ctx.pdf.setFont(hasCjk(cell) ? ctx.cjkFontName : ctx.latinFontName, rowIndex === 0 && !hasCjk(cell) ? 'bold' : 'normal')
+      return ctx.pdf.splitTextToSize(cell || ' ', colWidth - 10)
+    })
     const rowHeight = Math.max(...cellLines.map((lines) => Math.max(1, lines.length))) * step + 8
     ensureSpace(ctx, rowHeight + 2)
     row.forEach((_, colIndex) => {
@@ -448,6 +464,8 @@ function renderTable(ctx: PdfCtx, table: HTMLTableElement): void {
       }
       ctx.pdf.setDrawColor(207, 214, 222)
       ctx.pdf.rect(x, y, colWidth, rowHeight)
+      const cell = row[colIndex] || ''
+      ctx.pdf.setFont(hasCjk(cell) ? ctx.cjkFontName : ctx.latinFontName, rowIndex === 0 && !hasCjk(cell) ? 'bold' : 'normal')
       ctx.pdf.text(cellLines[colIndex], x + 5, y + 5, { baseline: 'top' })
     })
     ctx.y += rowHeight
@@ -530,7 +548,7 @@ function renderNode(ctx: PdfCtx, node: Node): void {
     ctx.pdf.setFillColor(248, 250, 252)
     ctx.pdf.setDrawColor(211, 217, 224)
     ctx.pdf.roundedRect(ctx.left, ctx.y, ctx.width, boxHeight, 4, 4, 'FD')
-    ctx.pdf.setFont(ctx.fontName, 'normal')
+    ctx.pdf.setFont(hasCjk(codeText) ? ctx.cjkFontName : 'courier', 'normal')
     ctx.pdf.setFontSize(fontSize)
     const wrapped = ctx.pdf.splitTextToSize(codeText || ' ', ctx.width - 12)
     ctx.pdf.text(wrapped, ctx.left + 6, ctx.y + 6, { baseline: 'top' })
@@ -606,12 +624,13 @@ export async function exportAsPdf(
       width: pageWidth - 84,
       y: 42,
       fontName: 'helvetica',
+      latinFontName: 'helvetica',
+      cjkFontName: 'helvetica',
       hasBoldFont: true,
     }
     const useCjkFont = await ensurePdfCjkFont(pdf)
     if (useCjkFont) {
-      ctx.fontName = CJK_FONT_NAME
-      ctx.hasBoldFont = false
+      ctx.cjkFontName = CJK_FONT_NAME
     }
     renderNode(ctx, root)
 

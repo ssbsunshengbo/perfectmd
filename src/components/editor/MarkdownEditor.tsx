@@ -254,34 +254,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     redoRef.current = []
   }, [createHistorySnapshot])
 
-  const emitSelectionStats = useCallback((selection: Selection | null) => {
-    const editor = editorRef.current
-    if (!selection || !selection.rangeCount || !editor) {
-      window.dispatchEvent(new CustomEvent('editor-selection-stats', {
-        detail: { hasSelection: false, charCount: 0, wordCount: 0 },
-      }))
-      return
-    }
-
-    const range = selection.getRangeAt(0)
-    if (!editor.contains(range.commonAncestorContainer)) {
-      window.dispatchEvent(new CustomEvent('editor-selection-stats', {
-        detail: { hasSelection: false, charCount: 0, wordCount: 0 },
-      }))
-      return
-    }
-
-    const text = selection.toString().replace(/\s+/g, ' ').trim()
-    const hasSelection = !selection.isCollapsed && text.length > 0
-    window.dispatchEvent(new CustomEvent('editor-selection-stats', {
-      detail: {
-        hasSelection,
-        charCount: hasSelection ? text.length : 0,
-        wordCount: hasSelection && text ? text.split(/\s+/).length : 0,
-      },
-    }))
-  }, [])
-
   // --- Selection & DOM utilities ---
   const {
     restoreSavedSelection,
@@ -309,6 +281,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     ensureCodeBlockControls,
     getSelectionCodeBlock,
     insertTextInCodeBlock,
+    insertPairedTextInCodeBlock,
     insertNewLineInCodeBlock,
     indentCodeBlockSelection,
     insertCodeBlockAtCaret,
@@ -452,9 +425,8 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       const newContent = serializeEditorContent(editor.innerHTML)
       onChange(newContent)
       pushHistorySnapshot(editor)
-      emitSelectionStats(window.getSelection())
     }
-  }, [emitSelectionStats, ensureCodeBlockControls, getSelectionCodeBlock, onChange, pushHistorySnapshot, scheduleSyntaxHighlight, serializeEditorContent])
+  }, [ensureCodeBlockControls, getSelectionCodeBlock, onChange, pushHistorySnapshot, scheduleSyntaxHighlight, serializeEditorContent])
 
   const applyHistorySnapshot = useCallback((snapshot: HistorySnapshot): boolean => {
     const editor = editorRef.current
@@ -465,14 +437,13 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     ensureCodeBlockControls(editor)
     renderCodeHighlights(editor, true)
     restoreSelectionSnapshot(editor, snapshot.selection)
-    emitSelectionStats(window.getSelection())
     isInternalChange.current = true
     onChange(serializeEditorContent(editor.innerHTML))
     requestAnimationFrame(() => {
       isRestoringHistoryRef.current = false
     })
     return true
-  }, [emitSelectionStats, ensureCodeBlockControls, onChange, renderCodeHighlights, restoreSelectionSnapshot, serializeEditorContent])
+  }, [ensureCodeBlockControls, onChange, renderCodeHighlights, restoreSelectionSnapshot, serializeEditorContent])
 
   const handleUndo = useCallback((): boolean => {
     if (historyRef.current.length <= 1) return false
@@ -602,7 +573,6 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     const selection = window.getSelection()
     if (!selection || !selection.rangeCount || !editorRef.current) {
       setFormatState(DEFAULT_FORMAT_STATE)
-      emitSelectionStats(selection)
       return
     }
 
@@ -611,20 +581,15 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       savedRangeRef.current = range.cloneRange()
       const detectedFormat = detectFormatState(range.commonAncestorContainer)
       setFormatState(detectedFormat)
-      emitSelectionStats(selection)
     } else {
       setFormatState(DEFAULT_FORMAT_STATE)
-      emitSelectionStats(selection)
     }
-  }, [detectFormatState, emitSelectionStats])
+  }, [detectFormatState])
 
   useEffect(() => {
     document.addEventListener('selectionchange', handleSelectionChange)
     return () => {
       document.removeEventListener('selectionchange', handleSelectionChange)
-      window.dispatchEvent(new CustomEvent('editor-selection-stats', {
-        detail: { hasSelection: false, charCount: 0, wordCount: 0 },
-      }))
     }
   }, [handleSelectionChange])
 
@@ -701,6 +666,50 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
 
     return getFontSizeFromNode(range.startContainer)
   }, [getFontSizeFromNode])
+
+  const getInlineCodeFromSelection = useCallback((selection: Selection | null): HTMLElement | null => {
+    if (!selection || !selection.rangeCount || !editorRef.current) return null
+    const range = selection.getRangeAt(0)
+    const nodes: Array<Node | null> = [
+      selection.anchorNode,
+      selection.focusNode,
+      range.commonAncestorContainer,
+    ]
+
+    for (const node of nodes) {
+      const element = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node as HTMLElement | null
+      const code = element?.closest('code.inline-code') as HTMLElement | null
+      if (code && editorRef.current.contains(code) && !code.closest('.code-block-wrapper')) return code
+    }
+    return null
+  }, [])
+
+  const unwrapInlineCode = useCallback((codeEl: HTMLElement, selection: Selection) => {
+    const parent = codeEl.parentNode
+    if (!parent) return
+    const marker = document.createTextNode('')
+    parent.insertBefore(marker, codeEl)
+    while (codeEl.firstChild) {
+      parent.insertBefore(codeEl.firstChild, codeEl)
+    }
+    parent.removeChild(codeEl)
+    const range = document.createRange()
+    range.setStartAfter(marker)
+    range.collapse(true)
+    marker.remove()
+    selection.removeAllRanges()
+    selection.addRange(range)
+    savedRangeRef.current = range.cloneRange()
+  }, [])
+
+  const getCenteredLinkPosition = useCallback(() => {
+    const popoverWidth = 320
+    const estimatedHeight = 170
+    return {
+      left: Math.max(8, Math.round((window.innerWidth - popoverWidth) / 2)),
+      top: Math.max(24, Math.round((window.innerHeight - estimatedHeight) / 2)),
+    }
+  }, [])
 
   // --- Style wrapping helper ---
   const wrapSelectionWithStyle = useCallback(
@@ -1209,6 +1218,14 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         return
       }
       case 'code': {
+        const existingInlineCode = getInlineCodeFromSelection(selection)
+        if (existingInlineCode) {
+          unwrapInlineCode(existingInlineCode, selection)
+          shouldResetInlineTypingRef.current = false
+          handleInput()
+          return
+        }
+
         const codeSpan = document.createElement('code')
         codeSpan.className = 'inline-code'
         const codeTextNode = document.createTextNode(selectedText || '\u200B')
@@ -1217,14 +1234,15 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         range.insertNode(codeSpan)
         const caret = document.createRange()
         if (selectedText) {
-          caret.setStartAfter(codeSpan)
-        } else {
           caret.setStart(codeTextNode, codeTextNode.textContent?.length || 0)
+        } else {
+          caret.setStart(codeTextNode, 0)
         }
         caret.collapse(true)
         selection.removeAllRanges()
         selection.addRange(caret)
         savedRangeRef.current = caret.cloneRange()
+        shouldResetInlineTypingRef.current = false
         break
       }
       case 'heading': {
@@ -1284,16 +1302,12 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
           : range.commonAncestorContainer as HTMLElement | null
         const currentLink = active?.closest('a') as HTMLAnchorElement | null
         const selected = selectedText.trim()
-        const rect = range.getBoundingClientRect()
-        const popoverWidth = 320
-        const left = Math.max(8, Math.min(rect.left + rect.width / 2 - popoverWidth / 2, window.innerWidth - popoverWidth - 8))
-        const top = Math.max(8, rect.bottom + 8)
         setEditingLink({
           element: currentLink,
           text: currentLink?.textContent || selected || '',
           href: currentLink?.getAttribute('href') || 'https://',
           range: range.cloneRange(),
-          position: { top, left },
+          position: getCenteredLinkPosition(),
         })
         if (!currentLink && selected) {
           savedRangeRef.current = range.cloneRange()
@@ -1374,7 +1388,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     }
 
     handleInput()
-  }, [applyFontSize, clearColorTypingState, clearInlineTypingState, convertBlockTag, ensureCaretOutsideInlineFormatting, ensureIsolatedBlock, getCurrentBlock, getCurrentListItem, getCurrentTableCell, getFontSizeFromRange, handleInput, insertCodeBlockAtCaret, openFormulaDialog, restoreSavedSelection, wrapSelectionWithStyle])
+  }, [applyFontSize, clearColorTypingState, clearInlineTypingState, convertBlockTag, ensureCaretOutsideInlineFormatting, ensureIsolatedBlock, getCenteredLinkPosition, getCurrentBlock, getCurrentListItem, getCurrentTableCell, getFontSizeFromRange, getInlineCodeFromSelection, handleInput, insertCodeBlockAtCaret, openFormulaDialog, restoreSavedSelection, unwrapInlineCode, wrapSelectionWithStyle])
 
   // --- Sync content to editor on external changes ---
   useEffect(() => {
@@ -1705,16 +1719,12 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         return
       }
       e.preventDefault()
-      const rect = link.getBoundingClientRect()
-      const popoverWidth = 320
-      const left = Math.max(8, Math.min(rect.left + rect.width / 2 - popoverWidth / 2, window.innerWidth - popoverWidth - 8))
-      const top = Math.max(8, rect.bottom + 8)
       setEditingLink({
         element: link,
         text: link.textContent || '',
         href: link.getAttribute('href') || '',
         range: null,
-        position: { top, left },
+        position: getCenteredLinkPosition(),
       })
       return
     }
@@ -1731,7 +1741,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     setSelectedImage(null)
     setImageOverlayRect(null)
     placeCaretFromPoint()
-  }, [recalcSelectedImageOverlay, setImageOverlayRect, setSelectedImage])
+  }, [getCenteredLinkPosition, recalcSelectedImageOverlay, setImageOverlayRect, setSelectedImage])
 
   const convertFenceToCodeBlock = useCallback((): boolean => {
     const selection = window.getSelection()
@@ -1810,6 +1820,17 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       return
     }
 
+    if ((e.key === 'Backspace' || e.key === 'Delete') && !isSelectionInsideCodeBlock()) {
+      const selection = window.getSelection()
+      const inlineCode = getInlineCodeFromSelection(selection)
+      if (selection && inlineCode && inlineCode.textContent?.replace(/\u200B/g, '').length === 0) {
+        e.preventDefault()
+        unwrapInlineCode(inlineCode, selection)
+        handleInput()
+        return
+      }
+    }
+
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
       if (exitCurrentBlockWithNewParagraph()) {
@@ -1831,6 +1852,14 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
         resizeSelectedImageByFactor(0.9)
         return
       }
+    }
+
+    if (e.key === '{' && !e.ctrlKey && !e.metaKey && !e.altKey && isSelectionInsideCodeBlock()) {
+      e.preventDefault()
+      const codeEl = insertPairedTextInCodeBlock('{', '}')
+      if (codeEl) scheduleSyntaxHighlight(codeEl)
+      handleInput()
+      return
     }
 
     if (e.key === 'Tab' && isSelectionInsideCodeBlock()) {
@@ -1955,7 +1984,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       e.preventDefault()
       document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;')
     }
-  }, [applyInlineMarkdownShortcut, applyMarkdownShortcut, applyStyle, clearColorTypingState, clearInlineTypingState, convertFenceToCodeBlock, exitCurrentBlockWithNewParagraph, exitHeadingWithParagraph, handleInput, handleListEnter, handleRedo, handleUndo, indentCodeBlockSelection, insertNewLineInCodeBlock, insertSoftBreakAtCaret, isCaretInsideList, isSelectionInsideCodeBlock, removeSingleEmptyListAtCaret, resizeSelectedImageByFactor, scheduleSyntaxHighlight, scrollCaretIntoView, selectedImage, setImageOverlayRect, setSelectedImage, splitParagraphAtCaret])
+  }, [applyInlineMarkdownShortcut, applyMarkdownShortcut, applyStyle, clearColorTypingState, clearInlineTypingState, convertFenceToCodeBlock, exitCurrentBlockWithNewParagraph, exitHeadingWithParagraph, getInlineCodeFromSelection, handleInput, handleListEnter, handleRedo, handleUndo, indentCodeBlockSelection, insertNewLineInCodeBlock, insertPairedTextInCodeBlock, insertSoftBreakAtCaret, isCaretInsideList, isSelectionInsideCodeBlock, removeSingleEmptyListAtCaret, resizeSelectedImageByFactor, scheduleSyntaxHighlight, scrollCaretIntoView, selectedImage, setImageOverlayRect, setSelectedImage, splitParagraphAtCaret, unwrapInlineCode])
 
   const handleBeforeInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
     const nativeEvent = e.nativeEvent as InputEvent
@@ -1985,7 +2014,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
   }, [handleInput, handlePaste, insertTextInCodeBlock, isSelectionInsideCodeBlock, scheduleSyntaxHighlight])
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <TopToolbar
         onApplyStyle={applyStyle}
         formatState={formatState}
@@ -1994,7 +2023,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
       <div
         ref={editorRef}
         contentEditable
-        className="prose-editor relative flex-1 overflow-y-auto p-8 outline-none focus:outline-none"
+        className="prose-editor relative min-h-0 flex-1 overflow-y-auto p-8 pb-24 outline-none focus:outline-none"
         onBeforeInput={handleBeforeInput}
         onInput={handleInput}
         onPaste={handleEditorPaste}

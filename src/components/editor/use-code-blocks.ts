@@ -419,6 +419,21 @@ export function useCodeBlocks(refs: EditorRefs) {
     return codeEl
   }, [getSelectionCodeBlock, replaceCodeBlockText])
 
+  const insertPairedTextInCodeBlock = useCallback((open: string, close: string): HTMLElement | null => {
+    const codeEl = getSelectionCodeBlock()
+    if (!codeEl) return null
+    const offsets = getSelectionOffsets(codeEl)
+    if (!offsets) return null
+
+    const source = getCodeText(codeEl)
+    const selectedText = source.slice(offsets.start, offsets.end)
+    const nextText = `${source.slice(0, offsets.start)}${open}${selectedText}${close}${source.slice(offsets.end)}`
+    const nextStart = offsets.start + open.length
+    const nextEnd = nextStart + selectedText.length
+    replaceCodeBlockText(codeEl, nextText, nextStart, nextEnd)
+    return codeEl
+  }, [getSelectionCodeBlock, replaceCodeBlockText])
+
   const insertNewLineInCodeBlock = useCallback((): HTMLElement | null => {
     const codeEl = getSelectionCodeBlock()
     if (!codeEl) return null
@@ -561,6 +576,7 @@ export function useCodeBlocks(refs: EditorRefs) {
     ensureCodeBlockControls,
     getSelectionCodeBlock,
     insertTextInCodeBlock,
+    insertPairedTextInCodeBlock,
     insertNewLineInCodeBlock,
     indentCodeBlockSelection,
     insertCodeBlockAtCaret,

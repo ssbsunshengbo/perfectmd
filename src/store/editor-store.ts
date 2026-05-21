@@ -28,6 +28,7 @@ interface EditorState {
   // Storage operations
   fetchDocuments: () => Promise<void>
   createDocument: () => Promise<Document | null>
+  importMarkdownDocument: (title: string, content: string) => Promise<Document | null>
   saveDocument: () => Promise<void>
   deleteDocument: (id: string) => Promise<void>
   togglePin: (id: string) => Promise<void>
@@ -351,6 +352,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return document
     } catch (error) {
       console.error('Failed to create document:', error)
+      return null
+    }
+  },
+
+  importMarkdownDocument: async (title, content) => {
+    if (!isBrowser()) return null
+    try {
+      const document = await createDoc(title || '未命名', content || '')
+      const { documents } = get()
+      set({ documents: [document, ...documents], currentDocument: document })
+      return document
+    } catch (error) {
+      console.error('Failed to import markdown document:', error)
       return null
     }
   },
