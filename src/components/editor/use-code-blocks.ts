@@ -447,6 +447,13 @@ export function useCodeBlocks(refs: EditorRefs) {
     const currentLine = before.slice(lineStart)
     const baseIndent = currentLine.match(/^[\t ]*/)?.[0] || ''
     const shouldIndentNextLine = /(?:[\{\[\(]|:)\s*$/.test(currentLine)
+    if (/\{\s*$/.test(currentLine) && after.startsWith('}')) {
+      const insertText = `\n${baseIndent}${CODE_INDENT}\n${baseIndent}`
+      const nextOffset = before.length + 1 + baseIndent.length + CODE_INDENT.length
+      replaceCodeBlockText(codeEl, `${before}${insertText}${after}`, nextOffset)
+      return codeEl
+    }
+
     const insertText = `\n${baseIndent}${shouldIndentNextLine ? CODE_INDENT : ''}`
     const nextOffset = before.length + insertText.length
 

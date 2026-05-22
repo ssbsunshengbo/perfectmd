@@ -702,6 +702,41 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     savedRangeRef.current = range.cloneRange()
   }, [])
 
+  const placeCaretInsideInlineCode = useCallback((codeEl: HTMLElement, clientX?: number) => {
+    let textNode = Array.from(codeEl.childNodes).find((node): node is Text => node.nodeType === Node.TEXT_NODE)
+    if (!textNode) {
+      textNode = document.createTextNode(codeEl.textContent || '\u200B')
+      codeEl.textContent = ''
+      codeEl.appendChild(textNode)
+    }
+
+    const text = textNode.textContent || ''
+    let offset = text.length
+    if (typeof clientX === 'number' && text.length > 0) {
+      let bestDistance = Number.POSITIVE_INFINITY
+      for (let index = 0; index <= text.length; index += 1) {
+        const probe = document.createRange()
+        probe.setStart(textNode, index)
+        probe.collapse(true)
+        const rect = probe.getBoundingClientRect()
+        const distance = Math.abs((rect.left || rect.right) - clientX)
+        if (Number.isFinite(distance) && distance < bestDistance) {
+          bestDistance = distance
+          offset = index
+        }
+      }
+    }
+
+    const selection = window.getSelection()
+    if (!selection) return
+    const range = document.createRange()
+    range.setStart(textNode, Math.max(0, Math.min(text.length, offset)))
+    range.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    savedRangeRef.current = range.cloneRange()
+  }, [])
+
   const getCenteredLinkPosition = useCallback(() => {
     const popoverWidth = 320
     const estimatedHeight = 170
@@ -1690,6 +1725,16 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     const formula = target.closest('.formula-inline')
     if (formula) return
 
+    const inlineCode = target.closest('code.inline-code') as HTMLElement | null
+    if (inlineCode && editorRef.current.contains(inlineCode) && !inlineCode.closest('.code-block-wrapper')) {
+      e.preventDefault()
+      setEditingLink(null)
+      setSelectedImage(null)
+      setImageOverlayRect(null)
+      placeCaretInsideInlineCode(inlineCode, e.clientX)
+      return
+    }
+
     const link = target.closest('a') as HTMLAnchorElement | null
     if (link && editorRef.current.contains(link)) {
       if (e.metaKey || e.ctrlKey) {
@@ -1741,7 +1786,7 @@ export function MarkdownEditor({ content, onChange }: MarkdownEditorProps) {
     setSelectedImage(null)
     setImageOverlayRect(null)
     placeCaretFromPoint()
-  }, [getCenteredLinkPosition, recalcSelectedImageOverlay, setImageOverlayRect, setSelectedImage])
+  }, [getCenteredLinkPosition, placeCaretInsideInlineCode, recalcSelectedImageOverlay, setImageOverlayRect, setSelectedImage])
 
   const convertFenceToCodeBlock = useCallback((): boolean => {
     const selection = window.getSelection()
