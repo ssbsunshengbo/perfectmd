@@ -71,6 +71,80 @@ test('uses CodeMirror for code blocks with brace completion and indentation', as
   await expect(code).toContainText('\n}')
 })
 
+test('keeps the persistent Markdown authoring controls available', async ({ page }) => {
+  const editor = await createDocument(page)
+  const topBar = page.locator('.milkdown-top-bar')
+  await expect(topBar).toBeVisible()
+
+  for (const label of [
+    '加粗', '斜体', '删除线', '行内代码', '无序列表', '有序列表',
+    '任务列表', '插入链接', '插入图片', '插入表格', '插入代码块',
+    '插入公式块', '引用', '分割线',
+  ]) {
+    await expect(topBar.getByTitle(label)).toHaveCount(1)
+  }
+
+  await editor.click()
+  await topBar.getByTitle('无序列表').click()
+  await editor.pressSequentially('First list item')
+  await expect(editor.locator('ul li')).toContainText('First list item')
+
+  await editor.press('Enter')
+  await topBar.getByTitle('插入表格').click()
+  await expect(editor.locator('table:visible')).toHaveCount(1)
+})
+
+test('persists underline, color, highlight, and font size as Markdown-compatible rich styles', async ({ page }) => {
+  const editor = await createDocument(page)
+  await editor.click()
+  await editor.pressSequentially('Styled text')
+  await editor.press('Meta+A')
+
+  await page.getByTitle('文字颜色').click()
+  await page.getByTitle('文字颜色 #ef4444').click()
+  await page.getByTitle('背景高亮').click()
+  await page.getByTitle('高亮颜色 #fef08a').click()
+  await page.locator('[title="字号"]').click()
+  await page.getByText('24px', { exact: true }).click()
+  await page.getByTitle('下划线').click()
+
+  const styledText = editor.locator('span[data-perfectmd-text-style="true"]')
+  await expect(styledText).toContainText('Styled text')
+  await expect(styledText).toHaveCSS('color', 'rgb(239, 68, 68)')
+  await expect(styledText).toHaveCSS('font-size', '24px')
+  await page.waitForTimeout(2200)
+
+  const savedContent = await page.evaluate(async () => {
+    const request = indexedDB.open('MarkdownEditorDB')
+    return await new Promise<string>((resolve) => {
+      request.onsuccess = () => {
+        const getAll = request.result.transaction('documents', 'readonly').objectStore('documents').getAll()
+        getAll.onsuccess = () => resolve(getAll.result[0]?.content || '')
+      }
+    })
+  })
+  expect(savedContent).toContain('<span style="color:#ef4444;background-color:#fef08a;font-size:24px;text-decoration:underline">Styled text</span>')
+})
+
+test('supports custom RGB colors and the legacy font-size step controls', async ({ page }) => {
+  const editor = await createDocument(page)
+  await editor.click()
+  await editor.pressSequentially('Custom style')
+  await editor.press('Meta+A')
+
+  await page.getByTitle('文字颜色').click()
+  await page.getByLabel('文字颜色 RGB').fill('12, 34, 56')
+  await page.getByRole('button', { name: '应用' }).click()
+  await page.getByTitle('增大字号').click()
+
+  const styledText = editor.locator('span[data-perfectmd-text-style="true"]')
+  await expect(styledText).toHaveCSS('color', 'rgb(12, 34, 56)')
+  await expect(styledText).toHaveCSS('font-size', '20px')
+
+  await page.getByTitle('减小字号').click()
+  await expect(styledText).toHaveCSS('font-size', '16px')
+})
+
 test('keeps long documents scrollable and switches to a coherent dark theme', async ({ page }) => {
   const editor = await createDocument(page)
   await editor.click()

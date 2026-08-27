@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { normalizeCodeLanguage } from '@/lib/code-languages'
+import { contentToExportHtml } from '@/lib/content-format'
 
 function markdownTextToBasicHtml(md: string): string {
   const lines = md.split('\n')
@@ -224,7 +225,7 @@ export function Sidebar({ onExport }: SidebarProps) {
   const outlineHeadings = useMemo(() => {
     if (!currentDocument?.content) return []
     const parser = new DOMParser()
-    const doc = parser.parseFromString(currentDocument.content, 'text/html')
+    const doc = parser.parseFromString(contentToExportHtml(currentDocument.content), 'text/html')
     const headingElements = Array.from(doc.querySelectorAll('h1, h2, h3'))
     return headingElements.map((heading, index) => {
       const level = Number(heading.tagName.toLowerCase().replace('h', '')) || 1
@@ -308,8 +309,7 @@ export function Sidebar({ onExport }: SidebarProps) {
       try {
         const text = await file.text()
         const title = file.name.replace(/\.(md|txt|markdown)$/i, '') || '未命名'
-        const htmlContent = markdownTextToBasicHtml(text)
-        const doc = await importMarkdownDocument(title, htmlContent)
+        const doc = await importMarkdownDocument(title, text)
         if (doc) imported++
       } catch (error) {
         console.error('Import markdown error:', error)
