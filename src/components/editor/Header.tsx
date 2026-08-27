@@ -371,6 +371,7 @@ const CUSTOM_CSS_VARIABLES = [
   '--card / --card-foreground',
   '--border / --muted / --muted-foreground',
   '--primary / --primary-foreground',
+  '--pmd-toolbar-background-override / --pmd-toolbar-foreground-override',
   '--pmd-link-color',
   '--pmd-code-bg / --pmd-code-fg / --pmd-code-border',
   '--pmd-code-keyword / --pmd-code-string / --pmd-code-comment',

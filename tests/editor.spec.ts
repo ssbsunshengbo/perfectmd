@@ -88,6 +88,7 @@ test('keeps the persistent Markdown authoring controls available', async ({ page
   await topBar.getByTitle('无序列表').click()
   await editor.pressSequentially('First list item')
   await expect(editor.locator('ul li')).toContainText('First list item')
+  await expect(editor.locator('ul li p').first()).toHaveCSS('margin-top', '0px')
 
   await editor.press('Enter')
   await topBar.getByTitle('插入表格').click()
@@ -151,15 +152,28 @@ test('keeps long documents scrollable and switches to a coherent dark theme', as
   await editor.pressSequentially(Array.from({ length: 80 }, (_, index) => `Paragraph ${index + 1} with enough text for scrolling.`).join('\n\n'))
 
   const scrollState = await page.locator('.perfectmd-milkdown-shell').evaluate((element) => {
+    const richToolbar = element.querySelector<HTMLElement>('.perfectmd-rich-style-toolbar')
+    const markdownToolbar = element.querySelector<HTMLElement>('.milkdown-top-bar')
     element.scrollTop = element.scrollHeight
+    const shellBounds = element.getBoundingClientRect()
+    const richBounds = richToolbar?.getBoundingClientRect()
+    const markdownBounds = markdownToolbar?.getBoundingClientRect()
     return {
       scrollTop: element.scrollTop,
       scrollHeight: element.scrollHeight,
       clientHeight: element.clientHeight,
+      shellTop: shellBounds.top,
+      richTop: richBounds?.top,
+      richHeight: richBounds?.height,
+      markdownTop: markdownBounds?.top,
     }
   })
   expect(scrollState.scrollHeight).toBeGreaterThan(scrollState.clientHeight)
   expect(scrollState.scrollTop + scrollState.clientHeight).toBeGreaterThanOrEqual(scrollState.scrollHeight - 1)
+  expect(scrollState.richTop).toBeCloseTo(scrollState.shellTop, 0)
+  expect(scrollState.markdownTop).toBeCloseTo((scrollState.richTop || 0) + (scrollState.richHeight || 0), 0)
+  await expect(page.getByTitle('文字颜色')).toBeVisible()
+  await expect(page.locator('.milkdown-top-bar').getByTitle('插入代码块')).toBeVisible()
 
   await page.getByTitle('切换到暗色模式').click()
   await expect(page.locator('html')).toHaveClass(/dark/)
@@ -168,4 +182,12 @@ test('keeps long documents scrollable and switches to a coherent dark theme', as
     return { background: style.backgroundColor, color: style.color }
   })
   expect(colors.background).not.toBe(colors.color)
+  const toolbarColors = await page.locator('.milkdown-top-bar').evaluate((element) => {
+    const icon = element.querySelector('svg')
+    return {
+      background: getComputedStyle(element).backgroundColor,
+      icon: icon ? getComputedStyle(icon).color : '',
+    }
+  })
+  expect(toolbarColors.icon).not.toBe(toolbarColors.background)
 })
