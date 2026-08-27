@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 
 import { prepareDocxExportPayload } from './html-to-markdown'
+import { contentToExportHtml } from './content-format'
 
 export interface DocxExportResult {
   status: 'saved' | 'cancelled' | 'unsupported' | 'missing_dependency' | 'failed'
@@ -62,7 +63,7 @@ export async function exportAsDocx(content: string, title: string): Promise<Docx
   if (!outputPath) return { status: 'cancelled' }
 
   try {
-    const payload = await prepareDocxExportPayload(content, title)
+    const payload = await prepareDocxExportPayload(contentToExportHtml(content), title)
     await invoke('export_docx', {
       payload: {
         outputPath,

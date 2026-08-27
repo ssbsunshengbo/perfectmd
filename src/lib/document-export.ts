@@ -6,7 +6,7 @@
  *   - exportAsPdf     – renders editor HTML to PDF and saves via native dialog
  */
 
-import { htmlToMarkdown } from './html-to-markdown'
+import { contentToExportHtml, contentToMarkdown } from './content-format'
 import { jsPDF } from 'jspdf'
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ export async function saveAsMarkdown(
   content: string,
   title: string,
 ): Promise<'saved' | 'cancelled' | 'fallback'> {
-  const markdown = htmlToMarkdown(content, title)
+  const markdown = contentToMarkdown(content, title)
   const safeTitle = sanitizeFileBaseName(title)
 
   if (isTauriRuntime()) {
@@ -79,7 +79,7 @@ export async function saveAsMarkdown(
 
 function setupExportDom(content: string): HTMLElement {
   const root = document.createElement('div')
-  root.innerHTML = content
+  root.innerHTML = contentToExportHtml(content)
   root
     .querySelectorAll('.code-controls, .code-copy-btn, .code-wrap-toggle, .code-copy-toast, [data-code-lang-select], [data-code-wrap-toggle]')
     .forEach((el) => el.remove())

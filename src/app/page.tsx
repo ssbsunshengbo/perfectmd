@@ -2,13 +2,13 @@
 
 import { useEffect, useCallback, useRef } from 'react'
 import { useEditorStore } from '@/store/editor-store'
-import { MarkdownEditor } from '@/components/editor/MarkdownEditor'
+import { MilkdownEditor } from '@/components/editor/MilkdownEditor'
 import { Sidebar } from '@/components/editor/Sidebar'
 import { Header } from '@/components/editor/Header'
 import { EmptyState } from '@/components/editor/EmptyState'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
-import { downloadMarkdown } from '@/lib/html-to-markdown'
+import { saveAsMarkdown } from '@/lib/document-export'
 
 export default function Home() {
   const {
@@ -43,7 +43,7 @@ export default function Home() {
     }
 
     try {
-      await downloadMarkdown(currentDocument.content, currentDocument.title)
+      await saveAsMarkdown(currentDocument.content, currentDocument.title)
       toast.success('文档导出成功')
     } catch (error) {
       console.error('Export error:', error)
@@ -66,8 +66,11 @@ export default function Home() {
         <Sidebar onExport={handleExport} />
         <main className="min-w-0 flex-1 overflow-hidden bg-background">
           {currentDocument ? (
-            <MarkdownEditor
+            <MilkdownEditor
+              key={currentDocument.id}
+              documentId={currentDocument.id}
               content={currentDocument.content}
+              title={currentDocument.title}
               onChange={handleContentChange}
             />
           ) : (
