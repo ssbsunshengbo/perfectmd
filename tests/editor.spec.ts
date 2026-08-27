@@ -1,4 +1,7 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
+
+const PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEklEQVQImWOwbvr2HxkzEBQAACikIFlq6jbfAAAAAElFTkSuQmCC'
 
 async function createDocument(page: import('@playwright/test').Page) {
   await page.goto('/')
@@ -69,6 +72,95 @@ test('uses CodeMirror for code blocks with brace completion and indentation', as
 
   await expect(code).toContainText('  return 1;')
   await expect(code).toContainText('\n}')
+})
+
+test('resizes image blocks from their visible drag border and saves the ratio', async ({ page }) => {
+  const editor = await createDocument(page)
+  const topBar = page.locator('.milkdown-top-bar')
+  await editor.click()
+  await topBar.getByTitle('插入图片').click()
+
+  const uploader = page.locator('.milkdown-image-block input[type="file"]')
+  await expect(uploader).toBeAttached()
+  await uploader.evaluate((input) => {
+    const file = new File([
+      '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="240"><rect width="400" height="240" fill="#3b82f6"/></svg>',
+    ], 'resize-test.svg', { type: 'image/svg+xml' })
+    const transfer = new DataTransfer()
+    transfer.items.add(file)
+    Object.defineProperty(input, 'files', { value: transfer.files, configurable: true })
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+
+  const imageBlock = page.locator('.milkdown-image-block')
+  const image = imageBlock.locator('img[data-type="image-block"]')
+  await expect(image).toBeVisible()
+  await image.click({ force: true })
+  await expect(imageBlock).toHaveClass(/selected/)
+
+  const resizeHandle = imageBlock.locator('.image-resize-handle')
+  await expect(resizeHandle).toHaveCSS('opacity', '1')
+  await expect(resizeHandle).toHaveCSS('height', '12px')
+
+  const before = await image.boundingBox()
+  const handleBox = await resizeHandle.boundingBox()
+  expect(before).not.toBeNull()
+  expect(handleBox).not.toBeNull()
+  await page.mouse.move((handleBox?.x || 0) + (handleBox?.width || 0) / 2, (handleBox?.y || 0) + (handleBox?.height || 0) / 2)
+  await page.mouse.down()
+  await page.mouse.move((handleBox?.x || 0) + (handleBox?.width || 0) / 2, (handleBox?.y || 0) + (handleBox?.height || 0) / 2 + 60, { steps: 4 })
+  await page.mouse.up()
+
+  await expect.poll(async () => (await image.boundingBox())?.height || 0).toBeGreaterThan((before?.height || 0) + 20)
+  await page.waitForTimeout(2200)
+  const savedContent = await page.evaluate(async () => {
+    const request = indexedDB.open('MarkdownEditorDB')
+    return await new Promise<string>((resolve) => {
+      request.onsuccess = () => {
+        const getAll = request.result.transaction('documents', 'readonly').objectStore('documents').getAll()
+        getAll.onsuccess = () => resolve(getAll.result[0]?.content || '')
+      }
+    })
+  })
+  expect(savedContent).toMatch(/!\[(?:0\.[0-9]+|[1-9][0-9]*(?:\.[0-9]+)?)\]\(pmd-image:\/\//)
+})
+
+test('embeds locally stored images in PDF exports', async ({ page }) => {
+  await createDocument(page)
+  const imageId = '11111111-1111-4111-8111-111111111111'
+  await page.evaluate(async ({ dataUrl, id }) => {
+    const imageBlob = await (await fetch(dataUrl)).blob()
+    const request = indexedDB.open('MarkdownEditorDB')
+    await new Promise<void>((resolve, reject) => {
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => {
+        const db = request.result
+        const transaction = db.transaction(['documents', 'images'], 'readwrite')
+        const documents = transaction.objectStore('documents')
+        const getAll = documents.getAll()
+        getAll.onsuccess = () => {
+          const document = getAll.result[0]
+          document.title = 'PDF image'
+          document.content = `![1.00](pmd-image://${id})`
+          documents.put(document)
+          transaction.objectStore('images').put({ id, blob: imageBlob, mimeType: 'image/png' })
+        }
+        transaction.oncomplete = () => resolve()
+        transaction.onerror = () => reject(transaction.error)
+      }
+    })
+  }, { dataUrl: PNG_DATA_URL, id: imageId })
+  await page.reload()
+  await page.getByText('PDF image', { exact: true }).click()
+  await expect(page.locator('.milkdown-image-block img')).toHaveCount(1)
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByTitle('导出为 PDF').click()
+  const download = await downloadPromise
+  const pdfPath = await download.path()
+  expect(pdfPath).not.toBeNull()
+  const bytes = await readFile(pdfPath || '')
+  expect(bytes.toString('latin1')).toContain('/Subtype /Image')
 })
 
 test('keeps the persistent Markdown authoring controls available', async ({ page }) => {

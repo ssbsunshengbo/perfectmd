@@ -153,6 +153,30 @@
   background: var(--pmd-table-header-bg, var(--muted));
 }
 
+.perfectmd-milkdown .milkdown .milkdown-image-block.selected > .image-wrapper {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.perfectmd-milkdown .milkdown .milkdown-image-block .image-wrapper .image-resize-handle {
+  left: -6px;
+  bottom: -7px;
+  transform: none;
+  width: calc(100% + 12px);
+  max-width: none;
+  height: 12px;
+  border: 2px solid var(--pmd-toolbar-background);
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 1px 5px color-mix(in srgb, var(--foreground), transparent 68%);
+  cursor: ns-resize;
+}
+
+.perfectmd-milkdown .milkdown .milkdown-image-block.selected > .image-wrapper .image-resize-handle,
+.perfectmd-milkdown .milkdown .milkdown-image-block:hover > .image-wrapper .image-resize-handle {
+  opacity: 1;
+}
+
 .perfectmd-milkdown .milkdown .ProseMirror a {
   color: var(--pmd-link-color, #2563eb);
 }

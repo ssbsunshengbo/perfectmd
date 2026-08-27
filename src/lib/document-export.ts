@@ -77,13 +77,51 @@ export async function saveAsMarkdown(
 // Export PDF (real text PDF, selectable/copyable)
 // ---------------------------------------------------------------------------
 
-function setupExportDom(content: string): HTMLElement {
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('Unable to read image data'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function resolvePdfImageSources(root: HTMLElement): Promise<void> {
+  const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'))
+  if (!images.length) return
+
+  const { getImageBlob, IMAGE_PROTOCOL } = await import('@/store/editor-store')
+  for (const image of images) {
+    const source = image.getAttribute('src')?.trim() || ''
+    if (!source || source.startsWith('data:')) continue
+
+    try {
+      if (source.startsWith(IMAGE_PROTOCOL)) {
+        const stored = await getImageBlob(source.slice(IMAGE_PROTOCOL.length))
+        if (stored) image.setAttribute('src', await blobToDataUrl(stored.blob))
+        continue
+      }
+
+      // Object URLs can occur in older documents. Remote images are included
+      // only when their server permits CORS access.
+      if (source.startsWith('blob:') || /^https?:\/\//i.test(source)) {
+        const response = await fetch(source)
+        if (response.ok) image.setAttribute('src', await blobToDataUrl(await response.blob()))
+      }
+    } catch {
+      // Leave unresolved images untouched so text export still succeeds.
+    }
+  }
+}
+
+async function setupExportDom(content: string): Promise<HTMLElement> {
   const root = document.createElement('div')
   root.innerHTML = contentToExportHtml(content)
   root
     .querySelectorAll('.code-controls, .code-copy-btn, .code-wrap-toggle, .code-copy-toast, [data-code-lang-select], [data-code-wrap-toggle]')
     .forEach((el) => el.remove())
   root.querySelectorAll('[contenteditable]').forEach((el) => el.removeAttribute('contenteditable'))
+  await resolvePdfImageSources(root)
   return root
 }
 
@@ -498,6 +536,48 @@ function renderList(ctx: PdfCtx, listEl: HTMLElement, level = 0): void {
   ctx.y += 4
 }
 
+function parseImageDimension(value: string | null | undefined): number | undefined {
+  if (!value) return undefined
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function getPdfImageFormat(source: string): 'PNG' | 'JPEG' | 'WEBP' {
+  if (/^data:image\/jpe?g/i.test(source)) return 'JPEG'
+  if (/^data:image\/webp/i.test(source)) return 'WEBP'
+  return 'PNG'
+}
+
+function renderImage(ctx: PdfCtx, image: HTMLImageElement): void {
+  const source = image.getAttribute('src')?.trim() || ''
+  if (!source.startsWith('data:image/')) return
+
+  try {
+    const properties = ctx.pdf.getImageProperties(source)
+    const intrinsicWidth = Number(properties.width) || 1
+    const intrinsicHeight = Number(properties.height) || 1
+    const requestedWidth = parseImageDimension(image.style.width) || parseImageDimension(image.getAttribute('width'))
+    const requestedHeight = parseImageDimension(image.style.height) || parseImageDimension(image.getAttribute('height'))
+    const storedRatio = parseImageDimension(image.getAttribute('data-pmd-ratio')) || parseImageDimension(image.getAttribute('alt')) || 1
+    const scale = Math.max(0.1, Math.min(4, storedRatio))
+
+    let width = requestedWidth ? requestedWidth * 0.75 : Math.min(ctx.width, intrinsicWidth * 0.75) * scale
+    let height = requestedHeight ? requestedHeight * 0.75 : width * (intrinsicHeight / intrinsicWidth)
+    if (requestedWidth && !requestedHeight) height = width * (intrinsicHeight / intrinsicWidth)
+    if (requestedHeight && !requestedWidth) width = height * (intrinsicWidth / intrinsicHeight)
+
+    const maxImageHeight = ctx.pageHeight - ctx.top - ctx.bottom
+    const shrink = Math.min(1, ctx.width / Math.max(width, 1), maxImageHeight / Math.max(height, 1))
+    width *= shrink
+    height *= shrink
+    ensureSpace(ctx, height + 12)
+    ctx.pdf.addImage(source, getPdfImageFormat(source), ctx.left, ctx.y, width, height, undefined, 'FAST')
+    ctx.y += height + 12
+  } catch {
+    // Unsupported image data should not make the rest of the PDF unavailable.
+  }
+}
+
 function renderNode(ctx: PdfCtx, node: Node): void {
   if (node.nodeType === Node.TEXT_NODE) {
     const text = normalizeWhitespace(node.textContent || '')
@@ -512,14 +592,24 @@ function renderNode(ctx: PdfCtx, node: Node): void {
   if (tag === 'P') {
     const nestedList = node.querySelector(':scope > ul, :scope > ol')
     const paragraphSegments: InlineSegment[] = []
-    Array.from(node.childNodes)
-      .filter((child) => !(child instanceof HTMLElement && (child.tagName === 'UL' || child.tagName === 'OL')))
-      .forEach((child) => {
-        paragraphSegments.push(...collectInlineSegments(child))
-      })
-    if (paragraphSegments.length) {
+    const flushParagraphText = () => {
+      if (!paragraphSegments.length) return
       drawInlineSegments(ctx, paragraphSegments, { fontSize: 12.5, lineHeight: 1.64, spacingAfter: 8 })
+      paragraphSegments.length = 0
     }
+
+    Array.from(node.childNodes).forEach((child) => {
+      if (child instanceof HTMLElement && (child.tagName === 'UL' || child.tagName === 'OL')) return
+      if (child instanceof HTMLElement && child.tagName === 'IMG') {
+        // Markdown images are commonly emitted inside a paragraph by marked.
+        // Flush surrounding text first so the image keeps its document order.
+        flushParagraphText()
+        renderImage(ctx, child as HTMLImageElement)
+        return
+      }
+      paragraphSegments.push(...collectInlineSegments(child))
+    })
+    flushParagraphText()
     if (nestedList instanceof HTMLElement) renderList(ctx, nestedList)
     return
   }
@@ -557,6 +647,10 @@ function renderNode(ctx: PdfCtx, node: Node): void {
   }
   if (tag === 'TABLE') {
     renderTable(ctx, node as HTMLTableElement)
+    return
+  }
+  if (tag === 'IMG') {
+    renderImage(ctx, node as HTMLImageElement)
     return
   }
   if (tag === 'HR') {
@@ -602,9 +696,9 @@ export async function exportAsPdf(
   title: string,
 ): Promise<ExportPdfResult> {
   const safeTitle = sanitizeFileBaseName(title)
-  const root = setupExportDom(content)
 
   try {
+    const root = await setupExportDom(content)
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'pt',
